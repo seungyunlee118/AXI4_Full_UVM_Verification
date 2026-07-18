@@ -44,8 +44,12 @@ call xvlog --sv -L uvm -i ..\tb\uvm ^
 if errorlevel 1 goto :error
 
 REM ---- Elaborate (xelab) ----
+REM --cov_db_* saves the functional-coverage database per test, so several
+REM tests can later be merged into one report by cov_report.bat.
 echo === Elaborating (xelab) ===
-call xelab -debug typical -L uvm -timescale 1ns/1ps tb_top -s tb_top_sim
+call xelab -debug typical -L uvm -timescale 1ns/1ps ^
+    --cov_db_dir . --cov_db_name %TEST% ^
+    tb_top -s tb_top_sim
 if errorlevel 1 goto :error
 
 REM ---- Simulate ----

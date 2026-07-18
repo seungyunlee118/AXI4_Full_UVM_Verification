@@ -97,6 +97,18 @@ class axi4_directed_test extends axi4_base_test;
     endfunction
 endclass
 
+// Coverage-closure test: wide stimulus to fill the covergroup bins.
+// May report WRAP mismatches (the real DUT bug) - those are true positives.
+class axi4_cov_test extends axi4_base_test;
+    `uvm_component_utils(axi4_cov_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+    virtual function axi4_base_seq get_seq();
+        axi4_cov_seq s = axi4_cov_seq::type_id::create("seq");
+        s.num = 40;              // extra random traffic after the sweep
+        return s;
+    endfunction
+endclass
+
 //---------------------------------------------------------------
 // WRAP burst test — EXPECTED TO FAIL.
 //

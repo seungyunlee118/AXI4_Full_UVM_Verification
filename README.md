@@ -88,15 +88,43 @@ breakdown.
 | 2 | SystemVerilog interface + transaction class | ✅ (item upgraded to UVM in Wk3) |
 | 3 | UVM: agent (driver / sequencer / monitor), env, tests | ✅ **runs on XSim, UVM_ERROR 0** |
 | 4 | Scoreboard + reference model, directed tests | ✅ **found a real DUT bug** |
-| 5 | Functional coverage + coverage report | ⬜ |
+| 5 | Functional coverage + coverage report | ✅ **100 % closed** |
 
-### Result so far
+### Results
 
-The scoreboard checks every read byte against an independent golden model.
-Clean regression (`axi4_base_test`, `axi4_directed_test`) passes with
-`UVM_ERROR : 0`; `axi4_wrap_test` reproduces a genuine DUT bug — **WRAP bursts
-are addressed like INCR**, so wrapped beats are written past the end of the
-window (24 byte mismatches). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Checking**: the scoreboard compares every read byte against an independent
+  golden model. Clean regression passes with `UVM_ERROR : 0`.
+- **Bug found**: `axi4_wrap_test` reproduces a genuine DUT defect — **WRAP
+  bursts are addressed like INCR**, so wrapped beats land past the end of the
+  window (24 byte mismatches). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Coverage**: `axi4_cov_test` reaches **100 %** functional coverage
+  (82 bursts, 269 beats checked), with structurally unreachable bins explicitly
+  justified via `ignore_bins`.
+
+```
+=========== AXI4 functional coverage ===========
+  bursts sampled : 82
+          cp_dir  100.00 %      x_burst_size  100.00 %
+        cp_burst  100.00 %      x_burst_len   100.00 %
+         cp_size  100.00 %      x_dir_burst   100.00 %
+          cp_len  100.00 %
+         cp_resp  100.00 %
+       cp_region  100.00 %
+         cp_strb  100.00 %
+           TOTAL  100.00 %
+===============================================
+```
+
+### Tests
+
+| test | purpose |
+|------|---------|
+| `axi4_base_test` | random write + read-back (default) |
+| `axi4_write_test` / `axi4_read_test` | single-direction traffic |
+| `axi4_rand_test` | mixed random read/write |
+| `axi4_directed_test` | corner cases: single beat, max burst, 4 KB edge, narrow, FIXED |
+| `axi4_cov_test` | coverage closure — sweeps + random mix |
+| `axi4_wrap_test` | **reproduces the WRAP bug** (fails on purpose) |
 
 See [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md) for details and the Questa
 command cheatsheet.

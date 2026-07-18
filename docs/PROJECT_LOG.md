@@ -204,6 +204,58 @@ reads from the same wrong addresses it wrote to. The test only became effective
 once the read-back used a **different access pattern (INCR)** over the same
 window. A self-consistent read-back cannot catch an addressing bug.
 
+## Week 5 — status: ✅ functional coverage, 100% closed
+
+Delivered:
+1. `tb/uvm/axi4_coverage.svh` — `uvm_subscriber` on the monitor's analysis
+   port. Covergroup with coverpoints `cp_dir / cp_burst / cp_size / cp_len /
+   cp_resp / cp_region / cp_strb` and crosses `x_burst_size / x_burst_len /
+   x_dir_burst`. Prints a per-coverpoint report at `report_phase`.
+2. `axi4_cov_seq` + `axi4_cov_test` — deterministic sweeps
+   (burst x size, burst x length class) followed by 40 random bursts.
+3. `sim/cov_report.bat` — xcrg wrapper (PRO licence only, see below).
+
+Final coverage (`run_xsim.bat axi4_cov_test`): **TOTAL 100.00 %**, 82 bursts
+sampled, 269 beats checked, 0 mismatches.
+
+### Unreachable bins — documented, not hidden
+- `cp_resp`: the DUT hardwires `bresp`/`rresp` to `OKAY`, so `EXOKAY/SLVERR/
+  DECERR` can never occur → `ignore_bins` with a comment.
+- `x_burst_len`: a **single-beat WRAP** is illegal in AXI (WRAP must be
+  2/4/8/16 beats) → `ignore_bins wrap_single`.
+
+### Coverage-closure story
+Random stimulus alone plateaued at **98.33 %**. The per-coverpoint report
+pinpointed the gap in `x_burst_len` (10/12 bins). Adding `ignore_bins` for the
+structurally impossible bin took it to 10/11 = 90.91 %, and a deterministic
+`burst_len_sweep()` (every burst type x every length class) closed it to
+100 %. Lesson: constrained-random gets you most of the way, but the last few
+bins usually need directed stimulus, and "unreachable" bins must be justified
+rather than left as noise.
+
+### ⚠️ xcrg needs a PRO license
+Vivado's coverage report generator refuses to run on the free BASIC tier:
+```
+ERROR: The Vivado Simulator license tier, BASIC, does not meet the requirement
+to run xcrg ... Please upgrade to a PRO license.
+```
+Coverage **collection** is unaffected. The testbench therefore builds its own
+report from the SystemVerilog coverage API (`get_inst_coverage()` per
+coverpoint/cross), which is simulator-independent and free — see
+`axi4_coverage::coverage_report()`.
+
+## Regression status (all tests)
+
+| test | scoreboard | UVM_ERROR |
+|------|-----------|-----------|
+| `axi4_base_test` | 5 wr / 5 rd, 53 beats, 0 mismatches | 0 |
+| `axi4_directed_test` | 6 wr / 6 rd, 49 beats, 0 mismatches | 0 |
+| `axi4_write_test` | 5 wr, 0 beats checked | 0 |
+| `axi4_read_test` | 5 rd, 30 beats, 0 mismatches | 0 |
+| `axi4_rand_test` | 2 wr / 3 rd, 24 beats, 0 mismatches | 0 |
+| `axi4_cov_test` | 42 wr / 40 rd, 269 beats, 0 mismatches | 0 |
+| `axi4_wrap_test` | 2 wr / 2 rd, 12 beats, **24 mismatches** | 24 (expected — DUT bug) |
+
 ## Vivado XSim cheatsheet (primary flow)
 
 ```

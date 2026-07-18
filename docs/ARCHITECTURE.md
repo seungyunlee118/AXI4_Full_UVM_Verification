@@ -37,7 +37,8 @@
 | `axi4_agent` | `uvm_agent` | Container: sequencer + driver + monitor. Active drives; passive only watches. |
 | `axi4_ref_model` | `uvm_object` | Golden byte-granular memory. Models *correct* AXI addressing (incl. real WRAP) and write strobes. |
 | `axi4_scoreboard` | `uvm_scoreboard` | Subscribes to the monitor: writes update the model, reads are compared byte-by-byte against it. |
-| `axi4_env` | `uvm_env` | Container for the agent + scoreboard (coverage comes in Week 5). |
+| `axi4_coverage` | `uvm_subscriber` | Second monitor subscriber; samples the functional covergroup and prints a per-coverpoint report. |
+| `axi4_env` | `uvm_env` | Container for the agent + scoreboard + coverage. |
 | `axi4_*_seq` | `uvm_sequence` | Stimulus programs: what transactions to generate. |
 | `axi4_base_test` | `uvm_test` | Top of the hierarchy: builds env, wires cfg, launches a sequence. |
 

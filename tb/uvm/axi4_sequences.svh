@@ -125,6 +125,67 @@ class axi4_wr_rd_seq extends axi4_base_seq;
 endclass
 
 //---------------------------------------------------------------
+// Coverage-closure stimulus: wide random mix over ALL burst types,
+// sizes and lengths, plus explicit sweeps so the rarer bins get hit.
+//
+// NOTE: this sequence allows AXI_WRAP, so it can legitimately surface
+// the DUT's WRAP addressing bug as scoreboard mismatches. Those are
+// true positives, not test-bench noise.
+//---------------------------------------------------------------
+class axi4_cov_seq extends axi4_base_seq;
+    `uvm_object_utils(axi4_cov_seq)
+    function new(string name = "axi4_cov_seq"); super.new(name); endfunction
+
+    task body();
+        // Deterministic sweep: every burst type x every size
+        foreach_burst_size();
+        // Deterministic sweep: every burst type x every length class
+        burst_len_sweep();
+        // Then a broad random mix to fill length / region / strobe bins
+        repeat (num) begin
+            req = axi4_seq_item::type_id::create("req");
+            start_item(req);
+            if (!req.randomize())
+                `uvm_error("RAND", "coverage item randomize() failed")
+            finish_item(req);
+        end
+    endtask
+
+    // Hit every (burst type x length class) combination deterministically.
+    // Random stimulus leaves holes here because FIXED/WRAP are weighted low,
+    // so the burst x length cross needs an explicit sweep to close.
+    task burst_len_sweep();
+        bit [AXI_ADDR_WIDTH-1:0] a = 16'h3000;
+        // one length from each class: single / 2-4 / 5-8 / 9-16 beats
+        bit [7:0] lens[4] = '{8'd0, 8'd2, 8'd6, 8'd12};
+
+        foreach (lens[i]) begin
+            wr_then_rd(a, lens[i], 3'd2, AXI_FIXED); a += 16'h0100;
+            wr_then_rd(a, lens[i], 3'd2, AXI_INCR);  a += 16'h0100;
+        end
+        // WRAP is only legal with 2/4/8/16 beats (len 1/3/7/15)
+        wr_then_rd(a, 8'd1,  3'd2, AXI_WRAP); a += 16'h0100;
+        wr_then_rd(a, 8'd3,  3'd2, AXI_WRAP); a += 16'h0100;
+        wr_then_rd(a, 8'd7,  3'd2, AXI_WRAP); a += 16'h0100;
+        wr_then_rd(a, 8'd15, 3'd2, AXI_WRAP);
+    endtask
+
+    // Hit every legal (burst, size) combination for both directions.
+    task foreach_burst_size();
+        axi_burst_e blist[3] = '{AXI_FIXED, AXI_INCR, AXI_WRAP};
+        bit [AXI_ADDR_WIDTH-1:0] a = 16'h2000;
+        foreach (blist[b]) begin
+            for (int s = 0; s <= 2; s++) begin
+                // WRAP is only legal with 2/4/8/16 beats -> use 4
+                automatic bit [7:0] l = (blist[b] == AXI_WRAP) ? 8'd3 : 8'd2;
+                wr_then_rd(a, l, s[2:0], blist[b]);
+                a += 16'h0100;
+            end
+        end
+    endtask
+endclass
+
+//---------------------------------------------------------------
 // Hand-picked corner cases, each written then read back.
 class axi4_directed_seq extends axi4_base_seq;
     `uvm_object_utils(axi4_directed_seq)
