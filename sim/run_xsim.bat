@@ -56,8 +56,10 @@ call xsim tb_top_sim -runall -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :gui_mode
+REM wave.tcl adds the signals to the wave window and THEN runs, because
+REM XSim only records signals that were added before the run started.
 echo === Simulating %TEST% (GUI) ===
-call xsim tb_top_sim -gui -testplusarg "UVM_TESTNAME=%TEST%"
+call xsim tb_top_sim -gui -tclbatch wave.tcl -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :error
