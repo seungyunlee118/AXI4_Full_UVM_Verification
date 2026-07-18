@@ -160,6 +160,50 @@ Local note: the Questa built-in UVM is 1.1d; XSim ships 1.2. The code only uses
 API common to both. When compile-checking on Questa, do NOT add a `+incdir` to
 the uvm-1.2 sources or the 1.2 macros clash with the 1.1d library.
 
+## Week 4 — status: ✅ scoreboard + ref model; real DUT bug found
+
+Delivered:
+1. `tb/uvm/axi4_ref_model.svh` — golden byte-granular memory. Models write
+   strobes and *correct* FIXED/INCR/WRAP addressing. Unwritten bytes read as 0
+   (matches the DUT zeroing its array at time 0).
+2. `tb/uvm/axi4_scoreboard.svh` — subscribes to the monitor's analysis port;
+   writes update the model, reads are compared byte-by-byte. Only the byte lanes
+   actually addressed by a beat are compared (other lanes are don't-care in AXI).
+3. `axi4_seq_item`: added `beat_addr(i)` (correct burst addressing, shared by
+   stimulus and model) and `lane_mask(i)`; `post_randomize` now **derives wstrb
+   from addr+size** instead of leaving it fully random — this was the Week 3
+   protocol gap.
+4. `axi4_env`: builds the scoreboard and connects `agent.mon.ap -> sb.ap_imp`.
+5. Sequences: general ones restricted to INCR/FIXED so the regression is clean;
+   added `axi4_directed_seq` (corner cases) and `axi4_wrap_seq` (bug repro).
+6. Tests: `axi4_directed_test`, `axi4_wrap_test`.
+
+Results:
+| test | outcome |
+|------|---------|
+| `axi4_base_test` | 5 wr / 5 rd, 53 beats, **0 mismatches**, UVM_ERROR 0 |
+| `axi4_directed_test` | 6 wr / 6 rd, 49 beats, **0 mismatches**, UVM_ERROR 0 |
+| `axi4_wrap_test` | 2 wr / 2 rd, 12 beats, **24 byte mismatches** (expected) |
+
+### DUT bug confirmed: WRAP bursts are addressed like INCR
+
+`axi_ram.v` does `read_addr <= read_addr + (1 << size)` (and the same on the
+write path) for any burst type except FIXED — it never wraps. Repro:
+
+```
+WRAP write @0x0A08, 4 beats x 4B  (window 0x0A00..0x0A0F)
+  correct : 0x0A08, 0x0A0C, 0x0A00, 0x0A04
+  DUT     : 0x0A08, 0x0A0C, 0x0A10, 0x0A14   <- runs past the window
+```
+
+### Verification lesson (worth repeating in interviews)
+
+The first version of the WRAP test wrote with WRAP and read back with WRAP — and
+**passed**, hiding the bug: the DUT is consistently wrong on both sides, so it
+reads from the same wrong addresses it wrote to. The test only became effective
+once the read-back used a **different access pattern (INCR)** over the same
+window. A self-consistent read-back cannot catch an addressing bug.
+
 ## Vivado XSim cheatsheet (primary flow)
 
 ```

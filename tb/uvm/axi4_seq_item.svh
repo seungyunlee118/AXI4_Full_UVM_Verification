@@ -57,10 +57,47 @@ class axi4_seq_item extends uvm_sequence_item;
     // Payload arrays are sized to the beat count.
     constraint c_payload { data.size() == len + 1; strb.size() == len + 1; }
 
-    // Reads have no write strobes -> force them all-ones for clean logs.
     function void post_randomize();
-        if (dir == AXI_READ)
+        if (dir == AXI_READ) begin
+            // Reads have no write strobes -> all-ones for clean logs.
             foreach (strb[i]) strb[i] = '1;
+        end
+        else begin
+            // AXI requires wstrb to sit on the byte lanes implied by
+            // addr+size. Randomized strobes are masked down to the legal
+            // lanes (deasserting some of them is still legal).
+            foreach (strb[i]) strb[i] &= lane_mask(i);
+        end
+    endfunction
+
+    //---------------------------------------------------------
+    // Address of beat i, with CORRECT AXI burst semantics.
+    // The reference model predicts with this; the DUT increments
+    // linearly even for WRAP, which is exactly how we catch that bug.
+    //---------------------------------------------------------
+    function bit [AXI_ADDR_WIDTH-1:0] beat_addr(int i);
+        int unsigned nbytes = 1 << size;
+        int unsigned total;
+        bit [AXI_ADDR_WIDTH-1:0] base;
+        case (burst)
+            AXI_FIXED: beat_addr = addr;                  // never moves
+            AXI_WRAP: begin
+                total = (len + 1) * nbytes;               // wrap window size
+                base  = addr - (addr % total);            // window base
+                beat_addr = base + (((addr - base) + i*nbytes) % total);
+            end
+            default:   beat_addr = addr + i*nbytes;       // AXI_INCR
+        endcase
+    endfunction
+
+    //---------------------------------------------------------
+    // Byte lanes that are active for beat i (derived from addr+size).
+    // e.g. 32-bit bus, size=1 (2B), addr%4==2  ->  mask = 4'b1100
+    //---------------------------------------------------------
+    function bit [AXI_STRB_WIDTH-1:0] lane_mask(int i);
+        int unsigned nbytes = 1 << size;
+        int unsigned off    = beat_addr(i) % AXI_STRB_WIDTH;
+        lane_mask = AXI_STRB_WIDTH'(((1 << nbytes) - 1) << off);
     endfunction
 
     //---------------------------------------------------------

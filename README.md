@@ -87,8 +87,16 @@ breakdown.
 | 1 | Sanity TB — DUT compiles & runs under clk/reset | ✅ done |
 | 2 | SystemVerilog interface + transaction class | ✅ (item upgraded to UVM in Wk3) |
 | 3 | UVM: agent (driver / sequencer / monitor), env, tests | ✅ **runs on XSim, UVM_ERROR 0** |
-| 4 | Scoreboard + reference model, directed tests | ⬜ |
+| 4 | Scoreboard + reference model, directed tests | ✅ **found a real DUT bug** |
 | 5 | Functional coverage + coverage report | ⬜ |
+
+### Result so far
+
+The scoreboard checks every read byte against an independent golden model.
+Clean regression (`axi4_base_test`, `axi4_directed_test`) passes with
+`UVM_ERROR : 0`; `axi4_wrap_test` reproduces a genuine DUT bug — **WRAP bursts
+are addressed like INCR**, so wrapped beats are written past the end of the
+window (24 byte mismatches). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 See [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md) for details and the Questa
 command cheatsheet.

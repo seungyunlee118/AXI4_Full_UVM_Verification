@@ -54,6 +54,8 @@ package axi4_pkg;
     `include "axi4_driver.svh"
     `include "axi4_monitor.svh"
     `include "axi4_agent.svh"
+    `include "axi4_ref_model.svh"
+    `include "axi4_scoreboard.svh"
     `include "axi4_env.svh"
     `include "axi4_sequences.svh"
     `include "axi4_base_test.svh"

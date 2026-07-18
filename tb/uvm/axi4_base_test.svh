@@ -87,4 +87,36 @@ class axi4_rand_test extends axi4_base_test;
     endfunction
 endclass
 
+// Corner cases: single beat, max burst, 4KB edge, narrow transfers, FIXED.
+class axi4_directed_test extends axi4_base_test;
+    `uvm_component_utils(axi4_directed_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+    virtual function axi4_base_seq get_seq();
+        axi4_directed_seq s = axi4_directed_seq::type_id::create("seq");
+        return s;
+    endfunction
+endclass
+
+//---------------------------------------------------------------
+// WRAP burst test — EXPECTED TO FAIL.
+//
+// The DUT increments WRAP addresses linearly instead of wrapping them,
+// so the scoreboard reports mismatches. This test exists to document
+// and reproduce that bug, so it is NOT part of the clean regression.
+//---------------------------------------------------------------
+class axi4_wrap_test extends axi4_base_test;
+    `uvm_component_utils(axi4_wrap_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+    virtual function axi4_base_seq get_seq();
+        axi4_wrap_seq s = axi4_wrap_seq::type_id::create("seq");
+        return s;
+    endfunction
+    function void start_of_simulation_phase(uvm_phase phase);
+        super.start_of_simulation_phase(phase);
+        `uvm_info("TEST",
+            "axi4_wrap_test: UVM_ERRORs below are EXPECTED - they demonstrate the DUT's WRAP-burst bug",
+            UVM_LOW)
+    endfunction
+endclass
+
 `endif
