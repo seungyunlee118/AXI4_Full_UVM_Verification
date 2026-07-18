@@ -1,45 +1,57 @@
 @echo off
 REM =============================================================
 REM Vivado XSim Run Script  (primary simulator for this project)
-REM Usage:
-REM   run_xsim.bat        - batch mode (no GUI)
-REM   run_xsim.bat gui    - open the XSim GUI with waveforms
 REM
-REM Requires Vivado on PATH (xvlog / xelab / xsim). Install the
-REM free AMD Vivado (Standard / ML Standard) edition, then run
-REM Vivado's settings64.bat once per shell, e.g.:
+REM Usage:
+REM   run_xsim.bat                 - default test (axi4_base_test), batch
+REM   run_xsim.bat gui             - default test, XSim GUI + waveforms
+REM   run_xsim.bat <TESTNAME>      - run a specific UVM test, batch
+REM   run_xsim.bat <TESTNAME> gui  - run a specific UVM test in the GUI
+REM
+REM Tests: axi4_base_test (write+readback), axi4_write_test,
+REM        axi4_read_test, axi4_rand_test
+REM
+REM Requires Vivado on PATH (xvlog / xelab / xsim). Run once per shell:
 REM   call "C:\Xilinx\Vivado\<ver>\settings64.bat"
 REM =============================================================
+setlocal
+
+REM ---- Pick test name + GUI flag from the two optional args ----
+set "TEST=axi4_base_test"
+set "GUI="
+if /I "%~1"=="gui" (set "GUI=1") else if not "%~1"=="" (set "TEST=%~1")
+if /I "%~2"=="gui" set "GUI=1"
 
 REM ---- Clean previous run artifacts ----
 if exist xsim.dir rmdir /s /q xsim.dir
 if exist .Xil      rmdir /s /q .Xil
 del /q *.jou *.log *.pb *.wdb 2>nul
 
-REM ---- Compile (xvlog): package before files that import it ----
+REM ---- Compile (xvlog): -L uvm links the built-in UVM library,
+REM      -i adds the include dir for the class .svh files ----
 echo === Compiling (xvlog) ===
-xvlog --sv ^
+xvlog --sv -L uvm -i ..\tb\uvm ^
     ..\rtl\axi_ram.v ^
-    ..\tb\axi4_pkg.sv ^
     ..\tb\axi4_if.sv ^
+    ..\tb\axi4_pkg.sv ^
     ..\tb\tb_top.sv
 if errorlevel 1 goto :error
 
 REM ---- Elaborate (xelab) ----
 echo === Elaborating (xelab) ===
-xelab -debug typical -timescale 1ns/1ps tb_top -s tb_top_sim
+xelab -debug typical -L uvm -timescale 1ns/1ps tb_top -s tb_top_sim
 if errorlevel 1 goto :error
 
-REM ---- Choose run mode ----
-if "%1" == "gui" goto :gui_mode
+REM ---- Simulate ----
+if defined GUI goto :gui_mode
 
-echo === Simulating (xsim batch) ===
-xsim tb_top_sim -runall
+echo === Simulating %TEST% (batch) ===
+xsim tb_top_sim -runall -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :gui_mode
-echo === Simulating (xsim GUI) ===
-xsim tb_top_sim -gui
+echo === Simulating %TEST% (GUI) ===
+xsim tb_top_sim -gui -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :error
@@ -48,3 +60,4 @@ exit /b 1
 
 :done
 echo === Done ===
+endlocal

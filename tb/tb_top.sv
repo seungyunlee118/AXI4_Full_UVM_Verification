@@ -1,41 +1,38 @@
 //=============================================================
-// Week 2 Test Bench
-//   - Connects the DUT through the axi4_if interface
-//   - Exercises the axi4_txn transaction class (randomize + print)
-//   - Still keeps the Week 1 sanity check (awready/arready == 1)
-// No bus traffic is driven yet; the driver arrives in Week 3.
+// tb_top — UVM top (Week 3)
+//   - generates clk/rst
+//   - instantiates the AXI interface and wires the DUT to it
+//   - publishes the virtual interface to the UVM env via config_db
+//   - launches run_test() (test chosen by +UVM_TESTNAME)
 //=============================================================
 `timescale 1ns/1ps
 
 module tb_top;
 
+    import uvm_pkg::*;
+    `include "uvm_macros.svh"
     import axi4_pkg::*;
 
-    // Parameters (match DUT defaults)
+    // Bus widths (must match axi4_pkg + the DUT instance below)
     localparam int DATA_WIDTH = 32;
     localparam int ADDR_WIDTH = 16;
     localparam int STRB_WIDTH = DATA_WIDTH/8;
     localparam int ID_WIDTH   = 8;
 
-    // Clock and reset
+    // ---- Clock / reset ----
     logic clk;
     logic rst;
 
-    // Clock: 10ns period = 100MHz
     initial clk = 0;
-    always #5 clk = ~clk;
+    always #5 clk = ~clk;                 // 100 MHz
 
-    // Reset sequence
     initial begin
         rst = 1'b1;
-        #100;
+        repeat (10) @(posedge clk);       // hold reset 10 cycles
         rst = 1'b0;
-        $display("[%0t] Reset released", $time);
     end
 
-    //---------------------------------------------------------
-    // Interface instance
-    //---------------------------------------------------------
+    // ---- Interface ----
     axi4_if #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
@@ -46,9 +43,7 @@ module tb_top;
         .rst(rst)
     );
 
-    //---------------------------------------------------------
-    // DUT instance (ports wired to the interface signals)
-    //---------------------------------------------------------
+    // ---- DUT ----
     axi_ram #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
@@ -94,53 +89,13 @@ module tb_top;
         .s_axi_rready(axi.rready)
     );
 
-    //---------------------------------------------------------
-    // Drive all master-side signals to their inactive values
-    // (keeps the DUT quiescent, same intent as Week 1)
-    //---------------------------------------------------------
+    // ---- Hand the interface to the UVM world, then start the test ----
     initial begin
-        axi.awid    = '0; axi.awaddr  = '0; axi.awlen  = '0;
-        axi.awsize  = '0; axi.awburst = '0; axi.awlock = '0;
-        axi.awcache = '0; axi.awprot  = '0; axi.awvalid = 1'b0;
-        axi.wdata   = '0; axi.wstrb   = '0; axi.wlast  = 1'b0;
-        axi.wvalid  = 1'b0;
-        axi.bready  = 1'b1;
-        axi.arid    = '0; axi.araddr  = '0; axi.arlen  = '0;
-        axi.arsize  = '0; axi.arburst = '0; axi.arlock = '0;
-        axi.arcache = '0; axi.arprot  = '0; axi.arvalid = 1'b0;
-        axi.rready  = 1'b1;
+        uvm_config_db#(virtual axi4_if)::set(null, "*", "vif", axi);
+        run_test("axi4_base_test");       // override with +UVM_TESTNAME=...
     end
 
-    //---------------------------------------------------------
-    // Week 2 smoke test: build and randomize transactions
-    //---------------------------------------------------------
-    initial begin
-        axi4_txn_t tr;
-        #120;   // wait until after reset is released
-        $display("--- Week 2 transaction randomization ---");
-        repeat (6) begin
-            tr = new();
-            if (!tr.randomize())
-                $fatal(1, "axi4_txn randomize() failed");
-            tr.display("  ");
-        end
-        $display("----------------------------------------");
-    end
-
-    //---------------------------------------------------------
-    // End of simulation + sanity check
-    //---------------------------------------------------------
-    initial begin
-        #500;
-        $display("[%0t] Sanity test complete. DUT is alive.", $time);
-        $display("  s_axi_awready = %b (expect 1 after reset)", axi.awready);
-        $display("  s_axi_arready = %b (expect 1 after reset)", axi.arready);
-        $finish;
-    end
-
-    //---------------------------------------------------------
-    // Waveform dump
-    //---------------------------------------------------------
+    // ---- Waveform dump ----
     initial begin
         $dumpfile("waves.vcd");
         $dumpvars;

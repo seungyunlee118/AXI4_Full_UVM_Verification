@@ -85,10 +85,45 @@ Delivered:
 
 Verification status:
 - ✅ Compiles + elaborates clean on Questa Starter (Errors 0, Warnings 0).
-- ⏳ Runtime randomization NOT yet exercised — needs Vivado XSim installed
-  (Starter can't run `randomize()`). Run `sim\run_xsim.bat` once Vivado is set
-  up; expect 6 lines of randomized `axi4_txn#N ...` output plus
-  `s_axi_awready = 1`, `s_axi_arready = 1`.
+- Note: in Week 3 the plain `axi4_txn` class was **upgraded to a UVM
+  `uvm_sequence_item`** (`axi4_seq_item`) and `axi4_pkg.sv` became the UVM
+  include hub, so the standalone 6-transaction smoke test in `tb_top` was
+  replaced by `run_test()`. The interface (`axi4_if.sv`) carries over unchanged.
+
+## Week 3 — status: 🟢 code written + compile-verified, run pending Vivado
+
+Goal: a full UVM agent (sequencer + driver + monitor) driving/observing real
+AXI traffic, plus an env and tests. See `docs/ARCHITECTURE.md` for the diagram.
+
+Delivered (all under `tb/uvm/`, included by `axi4_pkg.sv`):
+1. `axi4_seq_item.svh` — `uvm_sequence_item`; same constraints as Week 2 plus
+   `convert2string` / `do_copy` / `do_compare` (manual, not field macros).
+2. `axi4_agent_cfg.svh` — cfg object (virtual interface handle + active/passive).
+3. `axi4_driver.svh` — `uvm_driver`; AXI master protocol. Write drives AW‖W
+   concurrently (`fork`) then B; read drives AR then collects R beats. Drives
+   through `master_cb`.
+4. `axi4_monitor.svh` — `uvm_monitor`; rebuilds write/read bursts from the pins
+   and broadcasts them on an analysis port (feeds the Week 4 scoreboard).
+5. `axi4_agent.svh` — `uvm_agent` (+ `axi4_sequencer` typedef); active/passive.
+6. `axi4_env.svh` — `uvm_env` container.
+7. `axi4_sequences.svh` — base / write / read / rand / **wr_rd** (write then read
+   the same region back, sets up self-checking).
+8. `axi4_base_test.svh` — `uvm_test` (+ write/read/rand tests via `get_seq()`
+   override); grabs the vif from `config_db`, builds env, runs a sequence.
+9. `tb/tb_top.sv` — rewritten for UVM: publishes vif, calls `run_test()`.
+10. `sim/run_xsim.bat` — updated for UVM (`-L uvm`, test selection).
+
+Verification status:
+- ✅ **Whole env compiles clean (Errors 0, Warnings 0)** on Questa Starter using
+  its built-in UVM (1.1d) — a real syntax/type/structure check. `sim\run.bat`
+  does this compile-only check on the Starter edition.
+- ⏳ Runtime NOT yet exercised (Starter can't run UVM). Once Vivado is installed:
+  `cd sim && run_xsim.bat` → expect `print_topology`, per-transaction `DRV`/`MON`
+  log lines, and `UVM_ERROR : 0`. Try `run_xsim.bat axi4_write_test` etc.
+
+Local note: the Questa built-in UVM is 1.1d; XSim ships 1.2. The code only uses
+API common to both. When compile-checking on Questa, do NOT add a `+incdir` to
+the uvm-1.2 sources or the 1.2 macros clash with the 1.1d library.
 
 ## Vivado XSim cheatsheet (primary flow)
 

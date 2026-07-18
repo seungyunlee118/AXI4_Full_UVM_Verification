@@ -23,15 +23,25 @@ axi4_full_uvm/
 │   ├── axi_ram.v          # DUT — AXI4-Full RAM slave (Alex Forencich, MIT)
 │   └── Axi_ram_v2.v       # local variant / experiments
 ├── tb/
-│   ├── axi4_pkg.sv        # AXI enums + axi4_txn transaction class
 │   ├── axi4_if.sv         # AXI4 interface (5 channels, clocking, modports)
-│   └── tb_top.sv          # TB top: interface + DUT + randomization smoke test
+│   ├── axi4_pkg.sv        # UVM package: widths, enums, includes all classes
+│   ├── tb_top.sv          # UVM top: interface + DUT + run_test()
+│   └── uvm/               # UVM classes
+│       ├── axi4_seq_item.svh   # transaction (uvm_sequence_item)
+│       ├── axi4_agent_cfg.svh  # agent config (vif handle, active/passive)
+│       ├── axi4_driver.svh     # AXI master driver
+│       ├── axi4_monitor.svh    # passive monitor + analysis port
+│       ├── axi4_agent.svh      # agent (sequencer/driver/monitor)
+│       ├── axi4_env.svh        # environment
+│       ├── axi4_sequences.svh  # write/read/rand/wr_rd sequences
+│       └── axi4_base_test.svh  # base test + write/read/rand tests
 ├── sim/
-│   ├── run_xsim.bat       # Vivado XSim build + run (primary)
-│   └── run.bat            # Questa compile + run (needs verification license)
+│   ├── run_xsim.bat       # Vivado XSim build + run (primary; -L uvm)
+│   └── run.bat            # Questa compile-check (Starter can't run UVM)
 ├── docs/
 │   ├── axi_ram_dut_analysis.pdf   # detailed DUT analysis (12 pages)
-│   └── PROJECT_LOG.md             # plan, weekly roadmap, Questa cheatsheet
+│   ├── ARCHITECTURE.md            # UVM testbench architecture + diagram
+│   └── PROJECT_LOG.md             # plan, weekly roadmap, sim cheatsheets
 ├── .gitignore
 └── README.md
 ```
@@ -72,8 +82,8 @@ breakdown.
 | Week | Focus | Status |
 |------|-------|--------|
 | 1 | Sanity TB — DUT compiles & runs under clk/reset | ✅ done |
-| 2 | SystemVerilog interface + transaction class | 🟡 code done, run pending Vivado |
-| 3 | UVM: agent (driver / sequencer / monitor), base test | ⬜ |
+| 2 | SystemVerilog interface + transaction class | ✅ (item upgraded to UVM in Wk3) |
+| 3 | UVM: agent (driver / sequencer / monitor), env, tests | 🟢 compile-verified, run pending Vivado |
 | 4 | Scoreboard + reference model, directed tests | ⬜ |
 | 5 | Functional coverage + coverage report | ⬜ |
 

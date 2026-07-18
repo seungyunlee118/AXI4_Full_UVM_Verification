@@ -1,7 +1,9 @@
 //=============================================================
-// Week 2 - AXI4 package: enums + transaction class
-// (Plain SystemVerilog for now; will convert axi4_txn into a
-//  uvm_sequence_item in Week 3.)
+// axi4_pkg — the AXI4 UVM verification package
+//
+// Holds the bus-width parameters and protocol enums, then `include`s
+// every UVM class in dependency order. Compiling this one package
+// pulls in the whole environment.
 //=============================================================
 `ifndef AXI4_PKG_SV
 `define AXI4_PKG_SV
@@ -9,14 +11,27 @@
 
 package axi4_pkg;
 
-    //--------------------------------------------------------
+    import uvm_pkg::*;
+    `include "uvm_macros.svh"
+
+    //---------------------------------------------------------
+    // Bus configuration (matches the DUT instantiation in tb_top).
+    // Fixed here to keep the sequence item non-parameterized, which
+    // keeps the UVM factory usage simple. A fully parameterized VIP
+    // is a possible later extension.
+    //---------------------------------------------------------
+    parameter int AXI_DATA_WIDTH = 32;
+    parameter int AXI_ADDR_WIDTH = 16;
+    parameter int AXI_ID_WIDTH   = 8;
+    parameter int AXI_STRB_WIDTH = AXI_DATA_WIDTH / 8;
+
+    //---------------------------------------------------------
     // AXI4 protocol enums
-    //--------------------------------------------------------
+    //---------------------------------------------------------
     typedef enum bit [1:0] {
         AXI_FIXED = 2'b00,
         AXI_INCR  = 2'b01,
         AXI_WRAP  = 2'b10
-        // 2'b11 reserved
     } axi_burst_e;
 
     typedef enum bit [1:0] {
@@ -31,144 +46,17 @@ package axi4_pkg;
         AXI_WRITE = 1'b1
     } axi_dir_e;
 
-    //--------------------------------------------------------
-    // Transaction: one AXI burst (write or read)
-    //--------------------------------------------------------
-    class axi4_txn #(
-        parameter int DATA_WIDTH = 32,
-        parameter int ADDR_WIDTH = 16,
-        parameter int ID_WIDTH   = 8,
-        parameter int STRB_WIDTH = DATA_WIDTH/8
-    );
-
-        // Direction of the burst
-        rand axi_dir_e            dir;
-
-        // Address-channel fields (shared shape for AW / AR)
-        rand bit [ID_WIDTH-1:0]   id;
-        rand bit [ADDR_WIDTH-1:0] addr;
-        rand bit [7:0]            len;    // beats = len + 1
-        rand bit [2:0]            size;   // bytes/beat = 2**size
-        rand axi_burst_e          burst;
-
-        // Data-channel payload, one element per beat
-        rand bit [DATA_WIDTH-1:0] data [];
-        rand bit [STRB_WIDTH-1:0] strb [];
-
-        // Response captured from the DUT (not randomized)
-        axi_resp_e                resp = AXI_OKAY;
-
-        // Unique handle for logging
-        static int                s_count = 0;
-        int                       tag;
-
-        //----------------------------------------------------
-        // Constraints
-        //----------------------------------------------------
-        // Bounded burst length for early testing (1..16 beats)
-        constraint c_len { len inside {[0:15]}; }
-
-        // Transfer size cannot exceed the data-bus width
-        constraint c_size { size <= $clog2(STRB_WIDTH); }
-
-        // Prefer INCR, but allow FIXED / WRAP so we can hit the
-        // DUT's known WRAP weakness on purpose later.
-        constraint c_burst_dist {
-            burst dist { AXI_INCR := 8, AXI_FIXED := 1, AXI_WRAP := 1 };
-        }
-
-        // WRAP bursts must have 2, 4, 8 or 16 beats
-        constraint c_wrap_len {
-            (burst == AXI_WRAP) -> len inside {1, 3, 7, 15};
-        }
-
-        // Start address aligned to the transfer size
-        constraint c_align { addr % (1 << size) == 0; }
-
-        // A burst must not cross a 4 KB boundary
-        constraint c_4k {
-            (addr % 4096) + ((len + 1) << size) <= 4096;
-        }
-
-        // Payload arrays sized to the beat count
-        constraint c_payload_size {
-            data.size() == len + 1;
-            strb.size() == len + 1;
-        }
-
-        //----------------------------------------------------
-        // Convenience
-        //----------------------------------------------------
-        function new();
-            tag = s_count++;
-        endfunction
-
-        // beats in this burst
-        function int unsigned beats();
-            return len + 1;
-        endfunction
-
-        // bytes per beat
-        function int unsigned bytes_per_beat();
-            return (1 << size);
-        endfunction
-
-        // For read transactions strobes are meaningless -> force all-ones
-        function void post_randomize();
-            if (dir == AXI_READ) begin
-                foreach (strb[i]) strb[i] = '1;
-            end
-        endfunction
-
-        function string convert2string();
-            string s;
-            s = $sformatf(
-                "axi4_txn#%0d %s id=%0d addr=0x%0h len=%0d(%0d beats) size=%0d(%0d B) burst=%s resp=%s",
-                tag, dir.name(), id, addr, len, beats(), size,
-                bytes_per_beat(), burst.name(), resp.name());
-            if (data.size() > 0)
-                s = {s, $sformatf(" data[0]=0x%0h", data[0])};
-            return s;
-        endfunction
-
-        function void display(string prefix = "");
-            $display("%s%s", prefix, convert2string());
-        endfunction
-
-        // Deep copy
-        function axi4_txn #(DATA_WIDTH, ADDR_WIDTH, ID_WIDTH, STRB_WIDTH) clone();
-            clone = new();
-            clone.dir   = dir;
-            clone.id    = id;
-            clone.addr  = addr;
-            clone.len   = len;
-            clone.size  = size;
-            clone.burst = burst;
-            clone.resp  = resp;
-            clone.data  = new[data.size()](data);
-            clone.strb  = new[strb.size()](strb);
-            return clone;
-        endfunction
-
-        // Compare address/control + payload (ignores tag)
-        function bit compare(axi4_txn #(DATA_WIDTH, ADDR_WIDTH, ID_WIDTH, STRB_WIDTH) rhs);
-            if (rhs == null)                 return 0;
-            if (dir   !== rhs.dir)           return 0;
-            if (id    !== rhs.id)            return 0;
-            if (addr  !== rhs.addr)          return 0;
-            if (len   !== rhs.len)           return 0;
-            if (size  !== rhs.size)          return 0;
-            if (burst !== rhs.burst)         return 0;
-            if (data.size() != rhs.data.size()) return 0;
-            foreach (data[i]) if (data[i] !== rhs.data[i]) return 0;
-            return 1;
-        endfunction
-
-    endclass
-
-    // Default 32-bit / 16-bit-addr configuration used by tb_top
-    typedef axi4_txn #(.DATA_WIDTH(32), .ADDR_WIDTH(16),
-                       .ID_WIDTH(8),   .STRB_WIDTH(4)) axi4_txn_t;
+    //---------------------------------------------------------
+    // UVM classes, in dependency order
+    //---------------------------------------------------------
+    `include "axi4_seq_item.svh"
+    `include "axi4_agent_cfg.svh"
+    `include "axi4_driver.svh"
+    `include "axi4_monitor.svh"
+    `include "axi4_agent.svh"
+    `include "axi4_env.svh"
+    `include "axi4_sequences.svh"
+    `include "axi4_base_test.svh"
 
 endpackage
 
