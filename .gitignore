@@ -1,0 +1,25 @@
+# ---- Questa / ModelSim build artifacts ----
+sim/work/
+sim/transcript
+sim/*.wlf
+sim/*.vcd
+sim/*.ucdb
+sim/modelsim.ini
+sim/vsim_stacktrace.vstf
+sim/.build/
+sim/cov_report/
+
+# wlf temp files
+wlft*
+*.wlf
+
+# ---- Coverage ----
+*.ucdb
+cov_report/
+
+# ---- Editor / OS ----
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
