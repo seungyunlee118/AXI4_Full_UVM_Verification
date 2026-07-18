@@ -20,10 +20,11 @@ outstanding transactions, hardcoded responses).
 ```
 axi4_full_uvm/
 ├── rtl/
-│   ├── axi_ram.v          # DUT — AXI4-Full RAM slave (Alex Forencich, MIT)
-│   └── Axi_ram_v2.v       # local variant / experiments
+│   ├── axi_ram.v          # DUT v1 — AXI4-Full RAM slave (Alex Forencich, MIT)
+│   └── Axi_ram_v2.v       # DUT v2 — proper WRAP + outstanding transactions
 ├── tb/
 │   ├── axi4_if.sv         # AXI4 interface (5 channels, clocking, modports)
+│   ├── axi4_sva.sv        # SVA protocol checker, bind-ed into tb_top
 │   ├── axi4_pkg.sv        # UVM package: widths, enums, includes all classes
 │   ├── tb_top.sv          # UVM top: interface + DUT + run_test()
 │   └── uvm/               # UVM classes
@@ -89,6 +90,25 @@ breakdown.
 | 3 | UVM: agent (driver / sequencer / monitor), env, tests | ✅ **runs on XSim, UVM_ERROR 0** |
 | 4 | Scoreboard + reference model, directed tests | ✅ **found a real DUT bug** |
 | 5 | Functional coverage + coverage report | ✅ **100 % closed** |
+| 6 | SVA protocol checker + second DUT (`axi_ram_v2`) | ✅ **fix proven by regression** |
+
+### v1 vs v2 — the same test proves the fix
+
+`Axi_ram_v2.v` is an upgraded RTL (proper WRAP addressing, multiple outstanding
+transactions). Both DUTs share an identical port list, so `run_xsim.bat` can
+target either one:
+
+```bat
+run_xsim.bat axi4_wrap_test        :: axi_ram    (v1)
+run_xsim.bat axi4_wrap_test v2     :: axi_ram_v2
+```
+
+| test | v1 | v2 |
+|------|----|----|
+| base / directed / coverage | 0 mismatches | 0 mismatches |
+| **`axi4_wrap_test`** | **24 byte mismatches** 🐛 | **0 mismatches** ✅ |
+
+The unmodified Week 4 test now acts as a permanent regression guard.
 
 ### Results
 

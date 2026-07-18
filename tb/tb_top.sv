@@ -7,6 +7,19 @@
 //=============================================================
 `timescale 1ns/1ps
 
+//-------------------------------------------------------------
+// DUT selection. Both RTLs expose an identical AXI4 port list, so
+// only the module name changes:
+//   default        -> axi_ram      (original, has the WRAP bug)
+//   +define+DUT_V2 -> axi_ram_v2   (proper WRAP + outstanding support)
+// Pass "v2" to run_xsim.bat to build against the upgraded DUT.
+//-------------------------------------------------------------
+`ifdef DUT_V2
+    `define DUT_MODULE axi_ram_v2
+`else
+    `define DUT_MODULE axi_ram
+`endif
+
 module tb_top;
 
     import uvm_pkg::*;
@@ -43,8 +56,8 @@ module tb_top;
         .rst(rst)
     );
 
-    // ---- DUT ----
-    axi_ram #(
+    // ---- DUT ---- (module chosen by the DUT_V2 define above)
+    `DUT_MODULE #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
         .STRB_WIDTH(STRB_WIDTH),

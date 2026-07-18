@@ -20,11 +20,25 @@ REM (no XILINXD_LICENSE_FILE env var needed once it is there).
 REM =============================================================
 setlocal
 
-REM ---- Pick test name + GUI flag from the two optional args ----
+REM ---- Parse optional args in any order: <testname> | gui | v2 ----
 set "TEST=axi4_base_test"
 set "GUI="
-if /I "%~1"=="gui" (set "GUI=1") else if not "%~1"=="" (set "TEST=%~1")
-if /I "%~2"=="gui" set "GUI=1"
+set "DUTOPT="
+set "DUTNAME=axi_ram (v1)"
+:parse_args
+if "%~1"=="" goto :args_done
+if /I "%~1"=="gui" (
+    set "GUI=1"
+) else if /I "%~1"=="v2" (
+    set "DUTOPT=-d DUT_V2"
+    set "DUTNAME=axi_ram_v2"
+) else (
+    set "TEST=%~1"
+)
+shift
+goto :parse_args
+:args_done
+echo === DUT: %DUTNAME% ^| TEST: %TEST% ===
 
 REM ---- Clean previous run artifacts ----
 if exist xsim.dir rmdir /s /q xsim.dir
@@ -36,9 +50,11 @@ REM      -i adds the include dir for the class .svh files ----
 REM NOTE: xvlog/xelab/xsim are .bat files - they MUST be invoked with
 REM "call", otherwise control never returns to this script.
 echo === Compiling (xvlog) ===
-call xvlog --sv -L uvm -i ..\tb\uvm ^
+call xvlog --sv -L uvm -i ..\tb\uvm %DUTOPT% ^
     ..\rtl\axi_ram.v ^
+    ..\rtl\Axi_ram_v2.v ^
     ..\tb\axi4_if.sv ^
+    ..\tb\axi4_sva.sv ^
     ..\tb\axi4_pkg.sv ^
     ..\tb\tb_top.sv
 if errorlevel 1 goto :error

@@ -256,6 +256,68 @@ coverpoint/cross), which is simulator-independent and free — see
 | `axi4_cov_test` | 42 wr / 40 rd, 269 beats, 0 mismatches | 0 |
 | `axi4_wrap_test` | 2 wr / 2 rd, 12 beats, **24 mismatches** | 24 (expected — DUT bug) |
 
+## Week 6 — SVA protocol checker + second DUT (axi_ram_v2)
+
+### DUT selection
+Both RTLs expose an identical 35-signal AXI port list, so `tb_top` picks the
+module through a macro and `run_xsim.bat` takes a `v2` argument:
+```
+run_xsim.bat axi4_wrap_test        -> axi_ram    (v1, has the WRAP bug)
+run_xsim.bat axi4_wrap_test v2     -> axi_ram_v2 (proper WRAP + outstanding)
+```
+
+### Regression: v1 vs v2
+
+| test | v1 (axi_ram) | v2 (axi_ram_v2) |
+|------|--------------|------------------|
+| `axi4_base_test` | 53 beats, 0 mismatches | 53 beats, 0 mismatches |
+| `axi4_directed_test` | 49 beats, 0 mismatches | 49 beats, 0 mismatches |
+| `axi4_cov_test` | 269 beats, 0 mismatches | 269 beats, 0 mismatches |
+| **`axi4_wrap_test`** | **24 byte mismatches** 🐛 | **0 mismatches** ✅ |
+| SVA violations | 0 | 0 |
+
+**The same unmodified test proves the fix**: v1 fails it, v2 passes it. That is
+exactly what a regression suite is for — the bug found in Week 4 is now a
+permanent guard against regressions.
+
+### SVA protocol checker (`tb/axi4_sva.sv`)
+Standalone module `bind`-ed into `tb_top`; ~25 assertions covering:
+- VALID never withdrawn before READY (all 5 channels)
+- payload stability while a transfer is stalled
+- reserved burst encoding `2'b11`, size vs. bus width
+- no X/Z on qualified control fields
+- no response asserted during reset
+- WLAST/RLAST land on the beat implied by AWLEN/ARLEN, and no beat overrun
+  (tracked with a static circular buffer so it also holds for v2's multiple
+  outstanding addresses)
+
+### ⚠️ Three XSim SVA traps hit while writing this (all silent!)
+1. **Untyped property arguments are ignored.** `property p(valid, ready);` →
+   *"untyped port ... It will be ignored"*. The whole checker was vacuous with
+   no error. Fixed by expanding every check inline through a macro.
+2. **Dynamic arrays/queues inside a concurrent assertion are ignored.**
+   The WLAST/RLAST checks used a queue → silently dropped. Fixed with a static
+   circular buffer plus scalar `*_pending` / `*_head` wires.
+3. **A property without an implication is unsupported.** `assert property
+   (@(posedge clk) !awvalid)` → *"not supported yet for simulation"*. This is
+   what made the first self-test look like a failure of the whole checker.
+
+**Lesson: always prove assertions are live.** Every one of these failures was a
+*silent* pass. The checker was validated by inverting a real assertion and
+confirming it fired the expected number of times (5 firings against 5 observed
+AWVALID cycles), then reverting.
+
+### Note: SVA vs. scoreboard
+The SVA found nothing on either DUT — correctly. WRAP addressing is a
+*functional/data placement* bug, not a handshake-protocol violation. Assertions
+check "is the bus behaving legally", the scoreboard checks "is the data right".
+Both are needed; neither replaces the other.
+
+### Known gap / future work
+The driver is blocking (one burst at a time), so **v2's multiple-outstanding
+capability is not actually exercised yet**. Driving overlapping addresses would
+need a non-blocking driver with independent AW/W/B threads.
+
 ## Vivado XSim cheatsheet (primary flow)
 
 ```
