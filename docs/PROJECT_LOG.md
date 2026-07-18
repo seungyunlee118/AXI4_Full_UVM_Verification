@@ -5,10 +5,44 @@
 
 ## Toolchain decision
 
-- **Simulator: Siemens Questa** (chosen over other options — user is already
-  familiar with it, industry standard, resume-relevant).
 - DUT: `axi_ram.v` from Alex Forencich's `verilog-axi` (MIT license).
 - Waveform dump via `$dumpfile("waves.vcd")` + `$dumpvars`.
+- Originally planned on **Siemens Questa** (familiar, resume-relevant), but the
+  only license installed on this machine is the free **Questa FPGA Starter
+  Edition** — see the license note below. **Primary simulator switched to
+  Vivado XSim** (2026-07-17).
+
+## Simulator / license note (2026-07-17)
+
+While running the Week 2 testbench on the installed Questa, `randomize()`
+failed with:
+
+```
+** Error: Failure to checkout svverification license feature.
+** Fatal: (vsim-7099) Unable to check out a verification license for randomize()
+```
+
+Investigation:
+- Installed sim: `C:\altera_lite\25.1std\questa_fse` = **Questa Altera Starter
+  FPGA Edition** (free).
+- License file `C:\altera_lite\LR-168512_License.dat` contains only feature
+  `intelqsimstarter`.
+- The Starter edition has **no `svverification` license**, so it cannot run
+  constrained randomization (`randomize()`), the UVM class library, or
+  functional coverage (covergroups).
+- Confirmed still-working on Starter: compile/elaborate, waveforms, classes/OOP,
+  mailboxes, and `$urandom` / `$urandom_range` (no license needed).
+
+**Decision:** move to **AMD Vivado XSim** (free, supports UVM + constrained
+random + basic functional coverage) to keep the UVM roadmap intact.
+Alternatives considered: full/licensed Questa (if available via
+company/university), or a non-UVM `$urandom`-based TB on the Starter edition.
+
+### How to run
+- **XSim (primary):** `sim\run_xsim.bat` (needs Vivado on PATH; run its
+  `settings64.bat` first). `run_xsim.bat gui` for waveforms.
+- **Questa (only with a verification license):** `sim\run.bat` — compiles fine
+  on Starter but `randomize()` will fatal without the svverification feature.
 
 ## Weekly roadmap
 
@@ -31,17 +65,41 @@ Success criteria (all met):
 - Clock toggles at 10 ns period; reset high for first 100 ns then low.
 - Clean `$finish`, no compile errors.
 
-## Week 2 — next up
+## Week 2 — status: 🟡 code written, run pending Vivado install
 
 Goal: replace tied-off signals with a proper **interface** and a **transaction**
 object, in preparation for a UVM driver.
 
-Planned pieces:
+Delivered:
 1. `tb/axi4_if.sv` — SystemVerilog interface bundling all 5 AXI channels, with
-   `clocking` blocks and `modport`s (master/monitor).
-2. `tb/axi4_txn.sv` — transaction class: `id`, `addr`, `len`, `size`, `burst`,
-   `data[]`, `strb[]`, `resp`, with `rand` fields + constraints.
-3. Update `tb_top.sv` to instantiate the interface and connect it to the DUT.
+   `master_cb` / `monitor_cb` clocking blocks and `master`/`monitor` modports.
+2. `tb/axi4_pkg.sv` — package with AXI enums (`axi_burst_e`, `axi_resp_e`,
+   `axi_dir_e`) + parameterized `axi4_txn` class: `rand` fields
+   (`id/addr/len/size/burst/dir/data[]/strb[]`), constraints (bounded len,
+   size ≤ bus width, INCR-weighted burst dist, WRAP legal lengths, size
+   alignment, 4 KB boundary, payload sizing), and `clone`/`compare`/
+   `convert2string` helpers. Default config typedef `axi4_txn_t` (32b/16b).
+3. `tb/tb_top.sv` — instantiates the interface, wires the DUT through it, keeps
+   the Week 1 sanity check, and randomizes 6 transactions as a smoke test.
+4. `sim/run_xsim.bat` — Vivado XSim build+run script.
+
+Verification status:
+- ✅ Compiles + elaborates clean on Questa Starter (Errors 0, Warnings 0).
+- ⏳ Runtime randomization NOT yet exercised — needs Vivado XSim installed
+  (Starter can't run `randomize()`). Run `sim\run_xsim.bat` once Vivado is set
+  up; expect 6 lines of randomized `axi4_txn#N ...` output plus
+  `s_axi_awready = 1`, `s_axi_arready = 1`.
+
+## Vivado XSim cheatsheet (primary flow)
+
+```
+xvlog --sv <files...>              # compile (package first)
+xelab -debug typical tb_top -s sim # elaborate -> snapshot "sim"
+xsim sim -runall                   # batch run
+xsim sim -gui                      # GUI + waveforms
+```
+UVM (Week 3+): add `-L uvm` to xvlog/xelab and `` `include "uvm_macros.svh" `` +
+`import uvm_pkg::*;`. XSim ships a built-in UVM library.
 
 ## Questa command cheatsheet
 

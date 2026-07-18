@@ -1,7 +1,7 @@
 @echo off
 REM =============================================================
-REM Week 1 Sanity Test - Questa Run Script
-REM Usage: 
+REM Week 2 Test - Questa Run Script
+REM Usage:
 REM   run.bat        - batch mode (no GUI)
 REM   run.bat gui    - interactive GUI mode with waveforms
 REM =============================================================
@@ -24,7 +24,19 @@ vlog -sv -lint ^
     ..\rtl\axi_ram.v
 if errorlevel 1 goto :error
 
-REM Compile testbench
+REM Compile TB package (enums + transaction class) - must come first
+echo === Compiling TB package ===
+vlog -sv -lint ^
+    ..\tb\axi4_pkg.sv
+if errorlevel 1 goto :error
+
+REM Compile AXI interface
+echo === Compiling interface ===
+vlog -sv -lint ^
+    ..\tb\axi4_if.sv
+if errorlevel 1 goto :error
+
+REM Compile testbench top
 echo === Compiling TB ===
 vlog -sv -lint ^
     ..\tb\tb_top.sv

@@ -13,9 +13,21 @@ sim/cov_report/
 wlft*
 *.wlf
 
+# ---- Vivado XSim build artifacts ----
+sim/xsim.dir/
+sim/.Xil/
+sim/*.jou
+sim/*.log
+sim/*.pb
+sim/*.wdb
+sim/webtalk*
+xsim.dir/
+.Xil/
+
 # ---- Coverage ----
 *.ucdb
 cov_report/
+xsim.covdb/
 
 # ---- Editor / OS ----
 .vscode/
