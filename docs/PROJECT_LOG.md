@@ -25,8 +25,7 @@ failed with:
 Investigation:
 - Installed sim: `C:\altera_lite\25.1std\questa_fse` = **Questa Altera Starter
   FPGA Edition** (free).
-- License file `C:\altera_lite\LR-168512_License.dat` contains only feature
-  `intelqsimstarter`.
+- Its license file contains only the feature `intelqsimstarter`.
 - The Starter edition has **no `svverification` license**, so it cannot run
   constrained randomization (`randomize()`), the UVM class library, or
   functional coverage (covergroups).

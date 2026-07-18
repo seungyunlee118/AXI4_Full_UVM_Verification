@@ -164,3 +164,14 @@ dropped bursts once the DUT accepted a second address — see
 
 See [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md) for details and the Questa
 command cheatsheet.
+
+## License & attribution
+
+- `rtl/axi_ram.v` is from Alex Forencich's
+  [verilog-axi](https://github.com/alexforencich/verilog-axi) project and is
+  distributed under the **MIT License**; the original copyright header is kept
+  intact in the file.
+- `rtl/Axi_ram_v2.v` is a derivative work built on that module (proper WRAP
+  addressing + outstanding transaction support), and carries the same notice.
+- Everything else — the UVM environment (`tb/`), the SVA protocol checker, the
+  run scripts and the documentation — was written for this project.
