@@ -21,6 +21,9 @@ sim/*.log
 sim/*.pb
 sim/*.wdb
 sim/webtalk*
+sim/vivado_pid*.str
+sim/*.str
+sim/*.debug
 xsim.dir/
 .Xil/
 
