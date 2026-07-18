@@ -12,7 +12,11 @@ REM Tests: axi4_base_test (write+readback), axi4_write_test,
 REM        axi4_read_test, axi4_rand_test
 REM
 REM Requires Vivado on PATH (xvlog / xelab / xsim). Run once per shell:
-REM   call "C:\Xilinx\Vivado\<ver>\settings64.bat"
+REM   call "C:\AMDDesignTools\2026.1\Vivado\settings64.bat"
+REM
+REM License: the node-locked .lic must sit at the default location
+REM   C:\Users\<user>\.Xilinx\Xilinx.lic
+REM (no XILINXD_LICENSE_FILE env var needed once it is there).
 REM =============================================================
 setlocal
 
@@ -29,8 +33,10 @@ del /q *.jou *.log *.pb *.wdb 2>nul
 
 REM ---- Compile (xvlog): -L uvm links the built-in UVM library,
 REM      -i adds the include dir for the class .svh files ----
+REM NOTE: xvlog/xelab/xsim are .bat files - they MUST be invoked with
+REM "call", otherwise control never returns to this script.
 echo === Compiling (xvlog) ===
-xvlog --sv -L uvm -i ..\tb\uvm ^
+call xvlog --sv -L uvm -i ..\tb\uvm ^
     ..\rtl\axi_ram.v ^
     ..\tb\axi4_if.sv ^
     ..\tb\axi4_pkg.sv ^
@@ -39,19 +45,19 @@ if errorlevel 1 goto :error
 
 REM ---- Elaborate (xelab) ----
 echo === Elaborating (xelab) ===
-xelab -debug typical -L uvm -timescale 1ns/1ps tb_top -s tb_top_sim
+call xelab -debug typical -L uvm -timescale 1ns/1ps tb_top -s tb_top_sim
 if errorlevel 1 goto :error
 
 REM ---- Simulate ----
 if defined GUI goto :gui_mode
 
 echo === Simulating %TEST% (batch) ===
-xsim tb_top_sim -runall -testplusarg "UVM_TESTNAME=%TEST%"
+call xsim tb_top_sim -runall -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :gui_mode
 echo === Simulating %TEST% (GUI) ===
-xsim tb_top_sim -gui -testplusarg "UVM_TESTNAME=%TEST%"
+call xsim tb_top_sim -gui -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :error

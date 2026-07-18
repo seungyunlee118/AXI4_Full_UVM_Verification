@@ -90,7 +90,24 @@ Verification status:
   include hub, so the standalone 6-transaction smoke test in `tb_top` was
   replaced by `run_test()`. The interface (`axi4_if.sv`) carries over unchanged.
 
-## Week 3 — status: 🟢 code written + compile-verified, run pending Vivado
+## Environment (verified 2026-07-18)
+
+- **Vivado install path: `C:\AMDDesignTools\2026.1\Vivado`** (NOT `C:\Xilinx` —
+  the 2026.1 installer defaults to `C:\AMDDesignTools`). 2025.2 is also present.
+- Per-shell setup: `call C:\AMDDesignTools\2026.1\Vivado\settings64.bat`
+- **License: node-locked Basic tier**, host ID = the wired Ethernet MAC.
+  The `.lic` must live at **`C:\Users\<user>\.Xilinx\Xilinx.lic`** — that is the
+  default path Vivado searches. "License not found" simply meant the file was
+  still sitting in `Downloads`. No `XILINXD_LICENSE_FILE` env var is needed
+  (verified: the run works with the variable cleared).
+  Features include `Vivado_Simulation` (expires 2027-07-18, free annual renewal).
+- Note: Vivado was installed as *Enterprise Edition* but runs simulation fine on
+  the Basic license — the `Vivado_Simulation` feature is what matters.
+- ⚠️ Gotcha: `xvlog`/`xelab`/`xsim` are **`.bat` files**, so inside a batch
+  script they must be invoked with **`call`**, or control never returns and the
+  script silently stops after the first tool. This bit us in `run_xsim.bat`.
+
+## Week 3 — status: ✅ RUNS on XSim (UVM_ERROR 0)
 
 Goal: a full UVM agent (sequencer + driver + monitor) driving/observing real
 AXI traffic, plus an env and tests. See `docs/ARCHITECTURE.md` for the diagram.
@@ -114,12 +131,30 @@ Delivered (all under `tb/uvm/`, included by `axi4_pkg.sv`):
 10. `sim/run_xsim.bat` — updated for UVM (`-L uvm`, test selection).
 
 Verification status:
-- ✅ **Whole env compiles clean (Errors 0, Warnings 0)** on Questa Starter using
-  its built-in UVM (1.1d) — a real syntax/type/structure check. `sim\run.bat`
-  does this compile-only check on the Starter edition.
-- ⏳ Runtime NOT yet exercised (Starter can't run UVM). Once Vivado is installed:
-  `cd sim && run_xsim.bat` → expect `print_topology`, per-transaction `DRV`/`MON`
-  log lines, and `UVM_ERROR : 0`. Try `run_xsim.bat axi4_write_test` etc.
+- ✅ Compiles clean (Errors 0, Warnings 0) on Questa Starter built-in UVM (1.1d).
+- ✅ **Runs end-to-end on Vivado XSim 2026.1 (UVM 1.2)**: driver produced real
+  AXI handshakes, monitor reconstructed 10 bursts (5 write + 5 read pairs),
+  `UVM_ERROR : 0`, `UVM_FATAL : 0`, `$finish` at 1555 ns.
+
+### Finding from the first real run — matters for the Week 4 scoreboard
+
+Read-back data does **not** equal the written data, and read beats come out in
+identical pairs. This is **expected**, not a DUT bug — but the reference model
+must model it:
+
+1. **Byte strobes.** The sequence randomizes `wstrb`, so only some byte lanes are
+   actually written; the rest keep their old memory contents. A ref model that
+   assumes full-word writes will report false mismatches.
+2. **Narrow transfers.** With `size < bus width` (e.g. `size=1` → 2 B/beat on a
+   32-bit bus), consecutive beats land in the *same* 32-bit memory word: the DUT
+   indexes memory as `addr >> 2` (`VALID_ADDR_WIDTH = ADDR_WIDTH - $clog2(STRB_WIDTH)`).
+   Example seen: `addr=0x8b88, size=1, 8 beats` → word indices
+   `0x22e2,0x22e2,0x22e3,0x22e3,…` — hence beat pairs read back identical.
+3. **Protocol gap in our stimulus:** for narrow transfers real AXI requires
+   `wstrb` to match the active byte lanes implied by `addr`+`size`. We currently
+   randomize `wstrb` freely, which is not strictly protocol-correct. Week 4
+   should derive `wstrb` from `addr`/`size` (or constrain `size` to full width
+   while bringing the scoreboard up).
 
 Local note: the Questa built-in UVM is 1.1d; XSim ships 1.2. The code only uses
 API common to both. When compile-checking on Questa, do NOT add a `+incdir` to

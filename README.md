@@ -50,11 +50,14 @@ axi4_full_uvm/
 
 **Vivado XSim (primary):**
 ```bat
-call "C:\Xilinx\Vivado\<ver>\settings64.bat"   :: once per shell
+call "C:\AMDDesignTools\2026.1\Vivado\settings64.bat"   :: once per shell
 cd sim
-run_xsim.bat            :: batch mode
-run_xsim.bat gui        :: GUI mode with waveforms
+run_xsim.bat                    :: default test (write + readback)
+run_xsim.bat axi4_rand_test     :: mixed random read/write
+run_xsim.bat axi4_write_test gui:: a specific test in the GUI
 ```
+Requires the node-locked license at `C:\Users\<user>\.Xilinx\Xilinx.lic`
+(Vivado Basic tier includes the `Vivado_Simulation` feature).
 
 **Questa (only with a verification license):**
 ```bat
@@ -62,8 +65,8 @@ cd sim
 run.bat                 :: compiles on Starter, but randomize() needs a license
 ```
 
-Success = 6 randomized `axi4_txn#N …` lines, then `s_axi_awready = 1` and
-`s_axi_arready = 1` after reset, no compile errors, clean `$finish`.
+Success = per-transaction `[MON] WRITE/READ seen: …` lines and a report summary
+with `UVM_ERROR : 0` / `UVM_FATAL : 0`.
 
 ## DUT summary
 
@@ -83,7 +86,7 @@ breakdown.
 |------|-------|--------|
 | 1 | Sanity TB — DUT compiles & runs under clk/reset | ✅ done |
 | 2 | SystemVerilog interface + transaction class | ✅ (item upgraded to UVM in Wk3) |
-| 3 | UVM: agent (driver / sequencer / monitor), env, tests | 🟢 compile-verified, run pending Vivado |
+| 3 | UVM: agent (driver / sequencer / monitor), env, tests | ✅ **runs on XSim, UVM_ERROR 0** |
 | 4 | Scoreboard + reference model, directed tests | ⬜ |
 | 5 | Functional coverage + coverage report | ⬜ |
 
