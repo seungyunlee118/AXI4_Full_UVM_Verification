@@ -313,10 +313,71 @@ The SVA found nothing on either DUT — correctly. WRAP addressing is a
 check "is the bus behaving legally", the scoreboard checks "is the data right".
 Both are needed; neither replaces the other.
 
-### Known gap / future work
-The driver is blocking (one burst at a time), so **v2's multiple-outstanding
-capability is not actually exercised yet**. Driving overlapping addresses would
-need a non-blocking driver with independent AW/W/B threads.
+### Known gap — closed in Week 7
+The driver was blocking, so v2's multiple-outstanding capability was not
+exercised. See below.
+
+## Week 7 — pipelined driver + outstanding-aware monitor
+
+### Pipelined driver
+`axi4_driver` now runs one thread per channel (`item / aw / w / b / ar / r`) and
+calls `item_done()` as soon as an item is queued, so the sequence runs ahead of
+the bus. `cfg.max_outstanding` caps the depth:
+- `1` (default) → strictly serialised, byte-for-byte the old behaviour, which
+  keeps every existing write-then-read-back sequence correctly ordered
+- `>1` → pipelined
+
+A slave that cannot take a second address just holds `AWREADY` low, so the same
+driver works against v1 unchanged.
+
+The driver counts how many bursts are genuinely concurrent **on the bus**
+(address accepted, response not yet returned) and reports the peak — that is the
+measurement that proves pipelining actually happened, rather than assuming it.
+
+### Measured result (`axi4_outstanding_test`, max_outstanding = 4)
+
+| DUT | peak writes in flight | peak reads in flight | scoreboard |
+|-----|----------------------|----------------------|------------|
+| `axi_ram` (v1) | **2** | **2** | 8/8 bursts, 0 mismatches |
+| `axi_ram_v2` | **4** | **4** | 8/8 bursts, 0 mismatches |
+
+v1 reaching 2 is real but incidental: its FSM raises `AWREADY` in the same cycle
+it asserts `BVALID`, so one new address can be accepted while the previous
+response is still pending. v2's queue-based design sustains the full depth of 4.
+
+### 🐛 Bug found in our own testbench: the monitor was not outstanding-aware
+
+Turning on pipelining immediately produced 48 scoreboard mismatches on v2 — and
+the monitor reported only **3 of the 8** write bursts. The DUT was fine; the
+**monitor** was wrong.
+
+The original monitor ran one sequential loop per direction:
+`wait AW → collect W beats → wait B → repeat`. While it sat collecting W beats
+for burst *N*, the DUT accepted the address for burst *N+1* — and that handshake
+was simply never seen. Bursts were silently dropped and payloads mis-associated.
+
+Fix: the monitor is now channel-parallel like the driver, correlating phases
+through FIFOs (`aw_q → w_done_q → B`, `ar_q → R`). After the fix all 8 bursts
+are observed on both DUTs with 0 mismatches and no warnings.
+
+**Lesson:** a passive monitor has to model concurrency at least as well as the
+DUT does. A sequential monitor silently under-reports the moment the DUT starts
+pipelining — and because it drops transactions rather than flagging them, the
+symptom shows up as *scoreboard* failures pointing at the innocent DUT.
+
+Assumption documented: responses are correlated in order, which both DUTs
+guarantee (v2 explicitly states in-order responses). ID-based reordering would
+require per-ID FIFOs.
+
+### Full regression — 8 tests x 2 DUTs
+
+All combinations report 0 byte mismatches, 0 SVA violations and `UVM_ERROR : 0`,
+with the single intended exception:
+
+| test | v1 | v2 |
+|------|----|----|
+| base / directed / write / read / rand / cov / outstanding | pass | pass |
+| **`axi4_wrap_test`** | **24 mismatches** 🐛 | **pass** ✅ |
 
 ## Vivado XSim cheatsheet (primary flow)
 

@@ -91,6 +91,7 @@ breakdown.
 | 4 | Scoreboard + reference model, directed tests | ✅ **found a real DUT bug** |
 | 5 | Functional coverage + coverage report | ✅ **100 % closed** |
 | 6 | SVA protocol checker + second DUT (`axi_ram_v2`) | ✅ **fix proven by regression** |
+| 7 | Pipelined driver + outstanding-aware monitor | ✅ **v2 sustains 4 outstanding** |
 
 ### v1 vs v2 — the same test proves the fix
 
@@ -105,10 +106,25 @@ run_xsim.bat axi4_wrap_test v2     :: axi_ram_v2
 
 | test | v1 | v2 |
 |------|----|----|
-| base / directed / coverage | 0 mismatches | 0 mismatches |
+| base / directed / coverage / outstanding | 0 mismatches | 0 mismatches |
 | **`axi4_wrap_test`** | **24 byte mismatches** 🐛 | **0 mismatches** ✅ |
 
 The unmodified Week 4 test now acts as a permanent regression guard.
+
+### Outstanding transactions
+
+The driver is pipelined (one thread per AXI channel) and `cfg.max_outstanding`
+sets how many bursts may overlap. It reports the peak number that were genuinely
+concurrent *on the bus*:
+
+| DUT | peak writes | peak reads |
+|-----|------------|------------|
+| `axi_ram` (v1) | 2 | 2 |
+| `axi_ram_v2` | **4** | **4** |
+
+Getting there required fixing the **monitor**, which was sequential and silently
+dropped bursts once the DUT accepted a second address — see
+[docs/PROJECT_LOG.md](docs/PROJECT_LOG.md).
 
 ### Results
 

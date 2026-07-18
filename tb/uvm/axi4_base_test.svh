@@ -51,8 +51,23 @@ class axi4_base_test extends uvm_test;
         `uvm_info("TEST", $sformatf("starting sequence '%s' (num=%0d)",
                                     seq.get_type_name(), seq.num), UVM_LOW)
         seq.start(env.agent.sqr);
-        #200ns;   // let the final response drain through the monitor
+        drain();
         phase.drop_objection(this, "stimulus done");
+    endtask
+
+    // The driver is pipelined: item_done() returns as soon as a burst is
+    // queued, not when it finishes on the bus. So wait for the driver to
+    // go idle before ending the test, otherwise the last bursts would be
+    // cut off mid-flight.
+    protected task drain();
+        int unsigned guard = 0;
+        while (!env.agent.drv.is_idle() && guard < 10000) begin
+            #100ns;
+            guard++;
+        end
+        if (guard >= 10000)
+            `uvm_error("DRAIN", "driver did not go idle - transactions stuck?")
+        #200ns;   // let the final response propagate through the monitor
     endtask
 
 endclass
@@ -107,6 +122,45 @@ class axi4_cov_test extends axi4_base_test;
         s.num = 40;              // extra random traffic after the sweep
         return s;
     endfunction
+endclass
+
+//---------------------------------------------------------------
+// Outstanding-transaction test.
+//
+// Raises the driver's outstanding depth so several bursts overlap on
+// the bus, then checks the data still comes back correctly. The driver
+// reports the PEAK number of bursts that were genuinely concurrent:
+//   axi_ram    (v1) -> peak 1  (it accepts one address at a time)
+//   axi_ram_v2      -> peak >1 (queue-based, OUTSTANDING_DEPTH=4)
+// Writes and reads run as separate passes with a drain in between,
+// because the AXI read and write channels are independent and a read
+// must not overtake a write that has not completed yet.
+//---------------------------------------------------------------
+class axi4_outstanding_test extends axi4_base_test;
+    `uvm_component_utils(axi4_outstanding_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        // The driver's build_phase runs after ours, so it picks this up.
+        cfg.max_outstanding = 4;
+    endfunction
+
+    task run_phase(uvm_phase phase);
+        axi4_os_write_seq wr = axi4_os_write_seq::type_id::create("wr");
+        axi4_os_read_seq  rd = axi4_os_read_seq::type_id::create("rd");
+        phase.raise_objection(this, "outstanding stimulus");
+
+        `uvm_info("TEST", "phase 1 - pipelined writes", UVM_LOW)
+        wr.start(env.agent.sqr);
+        drain();                     // all writes must land before reading back
+
+        `uvm_info("TEST", "phase 2 - pipelined reads", UVM_LOW)
+        rd.start(env.agent.sqr);
+        drain();
+
+        phase.drop_objection(this, "done");
+    endtask
 endclass
 
 //---------------------------------------------------------------

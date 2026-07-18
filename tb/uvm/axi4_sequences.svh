@@ -125,6 +125,63 @@ class axi4_wr_rd_seq extends axi4_base_seq;
 endclass
 
 //---------------------------------------------------------------
+// Outstanding-transaction stimulus.
+//
+// Eight bursts over a fixed, non-overlapping address plan. The write
+// and read passes are separate sequences so the test can drain the bus
+// between them — otherwise a read could overtake a not-yet-completed
+// write (the AXI read and write channels are independent).
+//---------------------------------------------------------------
+class axi4_os_base_seq extends axi4_base_seq;
+    `uvm_object_utils(axi4_os_base_seq)
+    function new(string name = "axi4_os_base_seq"); super.new(name); endfunction
+
+    localparam int OS_COUNT = 8;
+    // 0x5000, 0x5100, ... 0x5700 — 4 beats x 4 B each, all 4 KB-safe
+    function bit [AXI_ADDR_WIDTH-1:0] os_addr(int i);
+        return 16'h5000 + (i * 16'h0100);
+    endfunction
+endclass
+
+class axi4_os_write_seq extends axi4_os_base_seq;
+    `uvm_object_utils(axi4_os_write_seq)
+    function new(string name = "axi4_os_write_seq"); super.new(name); endfunction
+    task body();
+        for (int i = 0; i < OS_COUNT; i++) begin
+            req = axi4_seq_item::type_id::create("req");
+            start_item(req);
+            if (!req.randomize() with { dir   == AXI_WRITE;
+                                        burst == AXI_INCR;
+                                        addr  == os_addr(i);
+                                        len   == 3;
+                                        size  == 3'd2;
+                                        foreach (strb[j])
+                                            strb[j] == {AXI_STRB_WIDTH{1'b1}}; })
+                `uvm_error("RAND", "outstanding write randomize() failed")
+            finish_item(req);
+        end
+    endtask
+endclass
+
+class axi4_os_read_seq extends axi4_os_base_seq;
+    `uvm_object_utils(axi4_os_read_seq)
+    function new(string name = "axi4_os_read_seq"); super.new(name); endfunction
+    task body();
+        for (int i = 0; i < OS_COUNT; i++) begin
+            req = axi4_seq_item::type_id::create("req");
+            start_item(req);
+            if (!req.randomize() with { dir   == AXI_READ;
+                                        burst == AXI_INCR;
+                                        addr  == os_addr(i);
+                                        len   == 3;
+                                        size  == 3'd2; })
+                `uvm_error("RAND", "outstanding read randomize() failed")
+            finish_item(req);
+        end
+    endtask
+endclass
+
+//---------------------------------------------------------------
 // Coverage-closure stimulus: wide random mix over ALL burst types,
 // sizes and lengths, plus explicit sweeps so the rarer bins get hit.
 //

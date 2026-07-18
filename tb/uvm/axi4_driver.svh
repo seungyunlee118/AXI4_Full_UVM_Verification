@@ -1,11 +1,28 @@
 //=============================================================
-// axi4_driver — AXI master driver
+// axi4_driver — AXI master driver (pipelined)
 //
-// run_phase loop: get a transaction from the sequencer, translate it
-// into pin-level AXI handshakes, tell the sequencer we're done.
-// Drives through the interface's master clocking block (master_cb),
-// which applies the correct input-sample / output-drive skews and
-// avoids clock-edge races.
+// Each AXI channel runs in its own thread, so several bursts can be
+// in flight at once. That is what exercises a slave with multiple
+// outstanding transaction support (axi_ram_v2).
+//
+//   item_thread : pulls items from the sequencer into the channel
+//                 queues and calls item_done() immediately, which is
+//                 what lets the sequence run ahead of the bus
+//   aw_thread   : drives the write address channel
+//   w_thread    : drives the write data beats (same order as AW,
+//                 as AXI requires)
+//   b_thread    : accepts write responses
+//   ar_thread   : drives the read address channel
+//   r_thread    : accepts read data beats
+//
+// cfg.max_outstanding caps how many bursts may be in flight:
+//   1  -> strictly serialised, identical to a blocking driver
+//   >1 -> pipelined
+// A DUT that cannot accept a second address simply holds AWREADY low,
+// so this driver degrades gracefully against axi_ram (v1) too.
+//
+// All driving goes through the master clocking block, which applies
+// the correct sample/drive skews and avoids clock-edge races.
 //=============================================================
 `ifndef AXI4_DRIVER_SVH
 `define AXI4_DRIVER_SVH
@@ -16,6 +33,21 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
 
     axi4_agent_cfg  cfg;
     virtual axi4_if vif;
+
+    // Per-channel work queues
+    protected axi4_seq_item aw_q[$];   // writes waiting to issue AW
+    protected axi4_seq_item w_q[$];    // writes waiting to send W beats
+    protected axi4_seq_item ar_q[$];   // reads waiting to issue AR
+
+    // Bursts accepted from the sequencer but not yet finished on the bus
+    protected int unsigned  n_inflight;
+
+    // Instrumentation: how many bursts were genuinely concurrent ON THE BUS
+    // (address accepted, response not yet received). A slave that only
+    // supports one outstanding transaction can never push these above 1,
+    // so these counters are the proof that pipelining actually happened.
+    int unsigned wr_outstanding, wr_peak;
+    int unsigned rd_outstanding, rd_peak;
 
     function new(string name, uvm_component parent);
         super.new(name, parent);
@@ -28,16 +60,34 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
         vif = cfg.vif;
     endfunction
 
+    // True when nothing is queued and nothing is on the bus.
+    // The test uses this to drain before dropping its objection.
+    function bit is_idle();
+        return (aw_q.size() == 0) && (w_q.size() == 0) &&
+               (ar_q.size() == 0) && (n_inflight == 0);
+    endfunction
+
+    function void report_phase(uvm_phase phase);
+        super.report_phase(phase);
+        `uvm_info("DRV", $sformatf(
+            "outstanding on the bus: peak writes = %0d, peak reads = %0d (max_outstanding = %0d)",
+            wr_peak, rd_peak, cfg.max_outstanding), UVM_LOW)
+    endfunction
+
     task run_phase(uvm_phase phase);
         reset_signals();
-        // Hold off driving until reset is de-asserted.
         @(negedge vif.rst);
         @(vif.master_cb);
-        forever begin
-            seq_item_port.get_next_item(req);   // blocking: wait for stimulus
-            drive(req);
-            seq_item_port.item_done();          // handshake back to sequencer
-        end
+        `uvm_info("DRV", $sformatf("driver running, max_outstanding=%0d",
+                                   cfg.max_outstanding), UVM_LOW)
+        fork
+            item_thread();
+            aw_thread();
+            w_thread();
+            b_thread();
+            ar_thread();
+            r_thread();
+        join
     endtask
 
     // Park all master-driven signals in their inactive state.
@@ -56,74 +106,126 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
         vif.master_cb.rready  <= 1'b0;
     endtask
 
-    task drive(axi4_seq_item tr);
-        if (tr.dir == AXI_WRITE) drive_write(tr);
-        else                     drive_read(tr);
-        `uvm_info("DRV", $sformatf("drove %s", tr.convert2string()), UVM_HIGH)
-    endtask
+    //---------------------------------------------------------
+    // Sequencer -> channel queues
+    //---------------------------------------------------------
+    task item_thread();
+        forever begin
+            seq_item_port.get_next_item(req);
 
-    //---------------------------------------------------------
-    // WRITE: AW and W run concurrently (fork), then wait for B.
-    //   The DUT only raises wready AFTER accepting AW, so the W
-    //   thread simply waits until wready appears — no deadlock.
-    //---------------------------------------------------------
-    task drive_write(axi4_seq_item tr);
-        fork
-            begin : aw_channel
-                vif.master_cb.awid    <= tr.id;
-                vif.master_cb.awaddr  <= tr.addr;
-                vif.master_cb.awlen   <= tr.len;
-                vif.master_cb.awsize  <= tr.size;
-                vif.master_cb.awburst <= tr.burst;
-                vif.master_cb.awvalid <= 1'b1;
-                @(vif.master_cb);
-                while (!vif.master_cb.awready) @(vif.master_cb);
-                vif.master_cb.awvalid <= 1'b0;
+            // Throttle to the configured outstanding depth.
+            while (n_inflight >= cfg.max_outstanding) @(vif.master_cb);
+
+            if (req.dir == AXI_WRITE) begin
+                aw_q.push_back(req);
+                w_q.push_back(req);      // same order -> AXI write-data order
             end
-            begin : w_channel
-                foreach (tr.data[i]) begin
-                    vif.master_cb.wdata  <= tr.data[i];
-                    vif.master_cb.wstrb  <= tr.strb[i];
-                    vif.master_cb.wlast  <= (i == tr.len);   // last beat flag
-                    vif.master_cb.wvalid <= 1'b1;
-                    @(vif.master_cb);
-                    while (!vif.master_cb.wready) @(vif.master_cb);
-                    vif.master_cb.wvalid <= 1'b0;
-                    vif.master_cb.wlast  <= 1'b0;
-                end
+            else begin
+                ar_q.push_back(req);
             end
-        join
-        // B channel: accept the write response.
-        vif.master_cb.bready <= 1'b1;
-        @(vif.master_cb);
-        while (!vif.master_cb.bvalid) @(vif.master_cb);
-        tr.resp = axi_resp_e'(vif.master_cb.bresp);
-        vif.master_cb.bready <= 1'b0;
-    endtask
+            n_inflight++;
 
-    //---------------------------------------------------------
-    // READ: drive AR, then accept R beats until the last one.
-    //   Captured read data is written back into tr.data[].
-    //---------------------------------------------------------
-    task drive_read(axi4_seq_item tr);
-        vif.master_cb.arid    <= tr.id;
-        vif.master_cb.araddr  <= tr.addr;
-        vif.master_cb.arlen   <= tr.len;
-        vif.master_cb.arsize  <= tr.size;
-        vif.master_cb.arburst <= tr.burst;
-        vif.master_cb.arvalid <= 1'b1;
-        @(vif.master_cb);
-        while (!vif.master_cb.arready) @(vif.master_cb);
-        vif.master_cb.arvalid <= 1'b0;
-
-        vif.master_cb.rready <= 1'b1;
-        foreach (tr.data[i]) begin
-            @(vif.master_cb);
-            while (!vif.master_cb.rvalid) @(vif.master_cb);
-            tr.data[i] = vif.master_cb.rdata;
-            tr.resp    = axi_resp_e'(vif.master_cb.rresp);
+            // Return the item now, so the sequence can produce the next one
+            // while this burst is still on the bus. This is what creates
+            // multiple outstanding transactions.
+            seq_item_port.item_done();
         end
-        vif.master_cb.rready <= 1'b0;
+    endtask
+
+    //---------------------------------------------------------
+    // Write address channel
+    //---------------------------------------------------------
+    task aw_thread();
+        axi4_seq_item tr;
+        forever begin
+            while (aw_q.size() == 0) @(vif.master_cb);
+            tr = aw_q.pop_front();
+
+            vif.master_cb.awid    <= tr.id;
+            vif.master_cb.awaddr  <= tr.addr;
+            vif.master_cb.awlen   <= tr.len;
+            vif.master_cb.awsize  <= tr.size;
+            vif.master_cb.awburst <= tr.burst;
+            vif.master_cb.awvalid <= 1'b1;
+            @(vif.master_cb);
+            while (!vif.master_cb.awready) @(vif.master_cb);
+            vif.master_cb.awvalid <= 1'b0;
+            wr_outstanding++;
+            if (wr_outstanding > wr_peak) wr_peak = wr_outstanding;
+        end
+    endtask
+
+    //---------------------------------------------------------
+    // Write data channel — beats in AW order
+    //---------------------------------------------------------
+    task w_thread();
+        axi4_seq_item tr;
+        forever begin
+            while (w_q.size() == 0) @(vif.master_cb);
+            tr = w_q.pop_front();
+
+            foreach (tr.data[i]) begin
+                vif.master_cb.wdata  <= tr.data[i];
+                vif.master_cb.wstrb  <= tr.strb[i];
+                vif.master_cb.wlast  <= (i == tr.len);
+                vif.master_cb.wvalid <= 1'b1;
+                @(vif.master_cb);
+                while (!vif.master_cb.wready) @(vif.master_cb);
+                vif.master_cb.wvalid <= 1'b0;
+                vif.master_cb.wlast  <= 1'b0;
+            end
+        end
+    endtask
+
+    //---------------------------------------------------------
+    // Write response channel — always ready, count completions
+    //---------------------------------------------------------
+    task b_thread();
+        vif.master_cb.bready <= 1'b1;
+        forever begin
+            @(vif.master_cb);
+            if (vif.master_cb.bvalid) begin
+                if (n_inflight > 0)     n_inflight--;
+                if (wr_outstanding > 0) wr_outstanding--;
+            end
+        end
+    endtask
+
+    //---------------------------------------------------------
+    // Read address channel
+    //---------------------------------------------------------
+    task ar_thread();
+        axi4_seq_item tr;
+        forever begin
+            while (ar_q.size() == 0) @(vif.master_cb);
+            tr = ar_q.pop_front();
+
+            vif.master_cb.arid    <= tr.id;
+            vif.master_cb.araddr  <= tr.addr;
+            vif.master_cb.arlen   <= tr.len;
+            vif.master_cb.arsize  <= tr.size;
+            vif.master_cb.arburst <= tr.burst;
+            vif.master_cb.arvalid <= 1'b1;
+            @(vif.master_cb);
+            while (!vif.master_cb.arready) @(vif.master_cb);
+            vif.master_cb.arvalid <= 1'b0;
+            rd_outstanding++;
+            if (rd_outstanding > rd_peak) rd_peak = rd_outstanding;
+        end
+    endtask
+
+    //---------------------------------------------------------
+    // Read data channel — always ready, a burst ends on RLAST
+    //---------------------------------------------------------
+    task r_thread();
+        vif.master_cb.rready <= 1'b1;
+        forever begin
+            @(vif.master_cb);
+            if (vif.master_cb.rvalid && vif.master_cb.rlast) begin
+                if (n_inflight > 0)     n_inflight--;
+                if (rd_outstanding > 0) rd_outstanding--;
+            end
+        end
     endtask
 
 endclass
