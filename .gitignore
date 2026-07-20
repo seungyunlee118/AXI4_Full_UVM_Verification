@@ -32,6 +32,9 @@ xsim.dir/
 cov_report/
 xsim.covdb/
 
+# ---- Personal study notes (kept local, not part of the public repo) ----
+docs/STUDY_GUIDE.md
+
 # ---- Editor / OS ----
 .vscode/
 *.swp
