@@ -1,28 +1,69 @@
-# UVM Testbench Architecture (Week 3+)
+# UVM Testbench Architecture
 
+## Structure & data flow
+
+```mermaid
+flowchart TB
+    seq["axi4_*_seq<br/>(sequence)"]
+
+    subgraph test["uvm_test · axi4_base_test"]
+      subgraph env["axi4_env"]
+        subgraph agent["axi4_agent"]
+          sqr["sequencer"]
+          drv["driver"]
+          mon["monitor"]
+        end
+        sb["scoreboard<br/>(+ ref_model)"]
+        cov["coverage"]
+      end
+    end
+
+    subgraph top["tb_top · module"]
+      clk["clk / rst gen"]
+      vif["axi4_if · interface<br/>master_cb / monitor_cb"]
+      dut["DUT<br/>axi_ram / axi_ram_v2"]
+      sva["axi4_sva<br/>protocol checker"]
+    end
+
+    seq -- seq_item --> sqr
+    sqr -- seq_item --> drv
+    drv == drive pins ==> vif
+    vif <== AXI signals ==> dut
+    vif -- sample pins --> mon
+    mon -- analysis_port --> sb
+    mon -- analysis_port --> cov
+    clk --> vif
+    sva -. watches .-> vif
+    vif -. vif via config_db .-> drv
+    vif -. vif via config_db .-> mon
 ```
-                          tb_top (module)
-   clk/rst gen ─┐   ┌──────────────────────────────┐
-                ├──▶│  axi4_if (interface)          │◀── DUT axi_ram
-                │   │  master_cb / monitor_cb       │    (pins wired to axi.*)
-                │   └───────────────┬───────────────┘
-   run_test() ──┘                   │ virtual interface (via uvm_config_db)
-                                     ▼
- ┌─────────────────────────── uvm_test (axi4_base_test) ───────────────────────┐
- │  builds cfg (holds vif, is_active), starts a sequence on the sequencer       │
- │                                                                              │
- │   ┌──────────────────────── axi4_env ─────────────────────────────────┐     │
- │   │                                                                    │     │
- │   │   ┌────────────────────── axi4_agent ───────────────────────┐      │     │
- │   │   │                                                          │      │     │
- │   │   │   sequence ──▶ [ sequencer ] ──seq_item──▶ [ driver ] ──▶ pins │     │
- │   │   │                                                     │    │      │     │
- │   │   │                                     [ monitor ] ◀───┘ (observes)     │
- │   │   │                                          │ analysis_port           │ │
- │   │   └──────────────────────────────────────────┼──────────┘      │      │ │
- │   │                                               ▼ (to scoreboard, Week 4) │ │
- │   └────────────────────────────────────────────────────────────────┘      │ │
- └────────────────────────────────────────────────────────────────────────────┘
+
+Solid arrows = the transaction data path. Dotted = setup (the virtual
+interface handed down through `uvm_config_db`) and the passive SVA checker.
+Note the monitor's analysis port fans out **1→N**: the same observed
+transaction feeds both the scoreboard (is it correct?) and coverage (did we
+exercise it?).
+
+## Life of one write transaction
+
+```mermaid
+sequenceDiagram
+    participant S as sequence
+    participant Q as sequencer
+    participant D as driver
+    participant H as DUT (via axi4_if)
+    participant M as monitor
+    participant B as scoreboard
+
+    S->>Q: start_item / finish_item (seq_item)
+    Q->>D: get_next_item(req)
+    Note over D: fork AW + W channels, then wait B
+    D->>H: AW addr/ctrl, W data beats, accept B
+    D-->>Q: item_done()
+    H-->>M: handshakes observed on the pins
+    Note over M: rebuild the burst (AW→W→B)
+    M->>B: analysis_port.write(txn)
+    Note over B: WRITE → update ref_model<br/>READ → compare byte-by-byte
 ```
 
 ## Component responsibilities
