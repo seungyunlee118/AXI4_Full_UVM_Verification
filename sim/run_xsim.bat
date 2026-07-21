@@ -2,11 +2,13 @@
 REM =============================================================
 REM Vivado XSim Run Script  (primary simulator for this project)
 REM
-REM Usage:
-REM   run_xsim.bat                 - default test (axi4_base_test), batch
-REM   run_xsim.bat gui             - default test, XSim GUI + waveforms
-REM   run_xsim.bat <TESTNAME>      - run a specific UVM test, batch
-REM   run_xsim.bat <TESTNAME> gui  - run a specific UVM test in the GUI
+REM Usage (arguments may appear in any order):
+REM   run_xsim.bat                    - default test (axi4_base_test), batch
+REM   run_xsim.bat <TESTNAME>         - run a specific UVM test, batch
+REM   run_xsim.bat <TESTNAME> gui     - open the GUI with ALL AXI signals
+REM   run_xsim.bat <TESTNAME> gui wr  - GUI, write path only (AW/W/B)
+REM   run_xsim.bat <TESTNAME> gui rd  - GUI, read path only  (AR/R)
+REM   run_xsim.bat <TESTNAME> v2      - build against axi_ram_v2
 REM
 REM Tests: axi4_base_test (write+readback), axi4_write_test,
 REM        axi4_read_test, axi4_rand_test
@@ -20,11 +22,13 @@ REM (no XILINXD_LICENSE_FILE env var needed once it is there).
 REM =============================================================
 setlocal
 
-REM ---- Parse optional args in any order: <testname> | gui | v2 ----
+REM ---- Parse optional args in any order: <testname> | gui | v2 | wr | rd ----
+REM      wr / rd pick a focused waveform set (write-path / read-path only)
 set "TEST=axi4_base_test"
 set "GUI="
 set "DUTOPT="
 set "DUTNAME=axi_ram (v1)"
+set "WAVE=wave.tcl"
 :parse_args
 if "%~1"=="" goto :args_done
 if /I "%~1"=="gui" (
@@ -32,6 +36,10 @@ if /I "%~1"=="gui" (
 ) else if /I "%~1"=="v2" (
     set "DUTOPT=-d DUT_V2"
     set "DUTNAME=axi_ram_v2"
+) else if /I "%~1"=="wr" (
+    set "WAVE=wave_write.tcl"
+) else if /I "%~1"=="rd" (
+    set "WAVE=wave_read.tcl"
 ) else (
     set "TEST=%~1"
 )
@@ -76,10 +84,10 @@ call xsim tb_top_sim -runall -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :gui_mode
-REM wave.tcl adds the signals to the wave window and THEN runs, because
-REM XSim only records signals that were added before the run started.
-echo === Simulating %TEST% (GUI) ===
-call xsim tb_top_sim -gui -tclbatch wave.tcl -testplusarg "UVM_TESTNAME=%TEST%"
+REM The wave script adds the signals to the wave window and THEN runs,
+REM because XSim only records signals added before the run started.
+echo === Simulating %TEST% (GUI, waves: %WAVE%) ===
+call xsim tb_top_sim -gui -tclbatch %WAVE% -testplusarg "UVM_TESTNAME=%TEST%"
 goto :done
 
 :error
