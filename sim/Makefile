@@ -37,7 +37,7 @@ SVSRC   = ../tb/axi4_if.sv ../tb/axi4_sva.sv ../tb/axi4_pkg.sv ../tb/tb_top.sv
 INCDIR  = -i ../tb/uvm
 
 XVLOG   = xvlog --sv -L uvm $(INCDIR) $(DUTOPT)
-XELAB   = xelab -debug typical -L uvm -timescale 1ns/1ps
+XELAB   = xelab -debug all -L uvm -timescale 1ns/1ps
 XSIM    = xsim
 
 # The elaboration snapshot depends on the DUT choice, so re-elaborate
@@ -53,7 +53,7 @@ run: $(STAMP)
 	$(XSIM) $(SNAP) -runall -testplusarg "UVM_TESTNAME=$(TEST)"
 
 # ---- compile + elaborate (once per DUT) --------------------
-$(STAMP): $(RTL) $(SVSRC) $(wildcard ../tb/uvm/*.svh)
+$(STAMP): $(RTL) $(SVSRC) $(wildcard ../tb/uvm/*.svh) Makefile
 	@echo "=== Compiling ($(DUTNAME)) ==="
 	$(XVLOG) $(RTL) $(SVSRC)
 	@echo "=== Elaborating ==="
