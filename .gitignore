@@ -42,3 +42,9 @@ docs/STUDY_GUIDE.md
 *~
 .DS_Store
 Thumbs.db
+dpi/xsim.dir/
+dpi/.Xil/
+dpi/*.jou
+dpi/*.log
+dpi/*.pb
+dpi/*.wdb
