@@ -24,6 +24,7 @@ sim/webtalk*
 sim/vivado_pid*.str
 sim/*.str
 sim/*.debug
+sim/dfx_runtime.txt
 xsim.dir/
 .Xil/
 
