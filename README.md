@@ -66,9 +66,7 @@ sim/
 dpi/
   axi4_ref_model.c     golden memory in C
   dpi_demo_tb.sv       DPI-C demonstration
-docs/
-  ARCHITECTURE.md      block diagram, transaction flow, design notes
-  PROJECT_LOG.md       development log, findings, cheat sheets
+
 ```
 
 ## Running
