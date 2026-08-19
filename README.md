@@ -120,7 +120,7 @@ passes on revision 2.
 A four-beat write burst on the bus:
 
 <!-- write-path waveform capture -->
-![AXI4 write burst](docs/AXI4_W_Handshake.png)
+<img width="2469" height="832" alt="Image" src="https://github.com/user-attachments/assets/886b516f-4812-4875-bdad-ef4374208c26" />
 
 ### Bug found: WRAP bursts addressed like INCR
 
