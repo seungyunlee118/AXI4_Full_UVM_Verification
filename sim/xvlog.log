@@ -1,0 +1,10 @@
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/rtl/axi_ram.v" into library work
+INFO: [VRFC 10-311] analyzing module axi_ram
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/rtl/Axi_ram_v2.v" into library work
+INFO: [VRFC 10-311] analyzing module axi_ram_v2
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/tb/axi4_if.sv" into library work
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/tb/axi4_sva.sv" into library work
+INFO: [VRFC 10-311] analyzing module axi4_sva
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/tb/axi4_pkg.sv" into library work
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "C:/Claud_work/axi4_full_uvm/tb/tb_top.sv" into library work
+INFO: [VRFC 10-311] analyzing module tb_top

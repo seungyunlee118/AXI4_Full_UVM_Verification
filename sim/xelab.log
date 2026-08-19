@@ -1,0 +1,21 @@
+Vivado Simulator v2026.1
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+Running: C:/AMDDesignTools/2026.1/Vivado/bin/unwrapped/win64.o/xelab.exe -debug all -L uvm -timescale 1ns/1ps --cov_db_dir . --cov_db_name axi4_base_test tb_top -s tb_top_sim 
+Multi-threading is on. Using 22 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+Completed static elaboration
+Starting simulation data flow analysis
+Completed simulation data flow analysis
+Time Resolution for simulation is 1ps
+Compiling package uvm.uvm_pkg
+Compiling package std.std
+Compiling package work.axi4_pkg
+Compiling module work.master_cb
+Compiling module work.monitor_cb
+Compiling module work.axi4_if_default
+Compiling module work.axi_ram(STRB_WIDTH=4)
+Compiling module work.axi4_sva_default
+Compiling module work.tb_top
+Built simulation snapshot tb_top_sim

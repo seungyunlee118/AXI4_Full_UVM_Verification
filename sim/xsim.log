@@ -1,0 +1,239 @@
+#-----------------------------------------------------------
+# xsim v2026.1 (64-bit)
+# SW Build 6511674 on Tue Jun 16 11:02:23 MDT 2026
+# IP Build 6504888 on Tue Jun 09 09:05:25 MDT 2026
+# SharedData Build 6501428 on Mon Jun 08 17:34:18 MDT 2026
+# Start of session at: Sat Aug  8 09:04:30 2026
+# Process ID         : 30816
+# Current directory  : C:/Claud_work/axi4_full_uvm/sim
+# Command line       : xsim.exe -mode tcl -source {xsim.dir/tb_top_sim/xsim_script.tcl}
+# Log file           : C:/Claud_work/axi4_full_uvm/sim/xsim.log
+# Journal file       : C:/Claud_work/axi4_full_uvm/sim\xsim.jou
+# Running On         : Edward
+# Platform           : Windows 11
+# Operating System   : 26200
+# Processor Detail   : Intel(R) Core(TM) Ultra 9 275HX
+# CPU Frequency      : 3072 MHz
+# CPU Physical cores : 24
+# CPU Logical cores  : 24
+# Host memory        : 33752 MB
+# Swap memory        : 3360 MB
+# Total Virtual      : 37113 MB
+# Available Virtual  : 8062 MB
+#-----------------------------------------------------------
+source xsim.dir/tb_top_sim/xsim_script.tcl
+# xsim {tb_top_sim} -testplusarg UVM_TESTNAME=axi4_base_test -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(18601) @ 0: reporter [UVM/RELNOTES] 
+----------------------------------------------------------------
+UVM-1.2
+(C) 2007-2014 Mentor Graphics Corporation
+(C) 2007-2014 Cadence Design Systems, Inc.
+(C) 2006-2014 Synopsys, Inc.
+(C) 2011-2013 Cypress Semiconductor Corp.
+(C) 2013-2014 NVIDIA Corporation
+----------------------------------------------------------------
+
+  ***********       IMPORTANT RELEASE NOTES         ************
+
+  You are using a version of the UVM library that has been compiled
+  with `UVM_NO_DEPRECATED undefined.
+
+  You are using a version of the UVM library that has been compiled
+  with `UVM_OBJECT_DO_NOT_NEED_CONSTRUCTOR undefined.
+
+      (Specify +UVM_NO_RELNOTES to turn off this notice)
+
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(18648) @ 0: reporter [NO_DPI_TSTNAME] UVM_NO_DPI defined--getting UVM_TESTNAME directly, without DPI
+UVM_INFO @ 0: reporter [RNTST] Running test axi4_base_test...
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(18752) @ 0: reporter [UVMTOP] UVM testbench topology:
+--------------------------------------------------------------
+Name                       Type                    Size  Value
+--------------------------------------------------------------
+uvm_test_top               axi4_base_test          -     @342 
+  env                      axi4_env                -     @361 
+    agent                  axi4_agent              -     @373 
+      drv                  axi4_driver             -     @581 
+        rsp_port           uvm_analysis_port       -     @600 
+        seq_item_port      uvm_seq_item_pull_port  -     @590 
+      mon                  axi4_monitor            -     @425 
+        ap                 uvm_analysis_port       -     @434 
+      sqr                  uvm_sequencer           -     @444 
+        rsp_export         uvm_analysis_export     -     @453 
+        seq_item_export    uvm_seq_item_pull_imp   -     @571 
+        arbitration_queue  array                   0     -    
+        lock_queue         array                   0     -    
+        num_last_reqs      integral                32    'd1  
+        num_last_rsps      integral                32    'd1  
+    cov                    axi4_coverage           -     @401 
+      analysis_imp         uvm_analysis_imp        -     @410 
+    sb                     axi4_scoreboard         -     @382 
+      ap_imp               uvm_analysis_imp        -     @391 
+--------------------------------------------------------------
+
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(20867) @ 0: reporter [UVM/COMP/NAMECHECK] This implementation of the component name checks requires DPI to be enabled
+UVM_INFO ..	buvm/axi4_base_test.svh(52) @ 0: uvm_test_top [TEST] starting sequence 'axi4_wr_rd_seq' (num=5)
+UVM_INFO ..	buvm/axi4_driver.svh(82) @ 95000: uvm_test_top.env.agent.drv [DRV] driver running, max_outstanding=1
+UVM_INFO ..	buvm/axi4_monitor.svh(130) @ 275000: uvm_test_top.env.agent.mon [MON] WRITE seen: AXI_WRITE id=132 addr=0xd3ad len=14(15 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0xd424a62c strb=0x0
+        beat[1] data=0xdaedd4b6 strb=0x4
+        beat[2] data=0x1b2ff7df strb=0x0
+        beat[3] data=0x2e36b4a7 strb=0x0
+        beat[4] data=0xf5551650 strb=0x0
+        beat[5] data=0x05ed515d strb=0x0
+        beat[6] data=0xd25dd8d9 strb=0x8
+        beat[7] data=0xc979bc7c strb=0x0
+        beat[8] data=0xe0db2613 strb=0x0
+        beat[9] data=0xed8dd0b8 strb=0x0
+        beat[10] data=0xf7b07123 strb=0x8
+        beat[11] data=0xd6303c64 strb=0x0
+        beat[12] data=0xf37b2215 strb=0x0
+        beat[13] data=0xca0e49fc strb=0x0
+        beat[14] data=0x9fa9f8e0 strb=0x0
+UVM_INFO ..	buvm/axi4_monitor.svh(180) @ 455000: uvm_test_top.env.agent.mon [MON] READ  seen: AXI_READ id=132 addr=0xd3ad len=14(15 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0x00ed0000 strb=0xf
+        beat[1] data=0x00ed0000 strb=0xf
+        beat[2] data=0x00ed0000 strb=0xf
+        beat[3] data=0xd2000000 strb=0xf
+        beat[4] data=0xd2000000 strb=0xf
+        beat[5] data=0xd2000000 strb=0xf
+        beat[6] data=0xd2000000 strb=0xf
+        beat[7] data=0xf7000000 strb=0xf
+        beat[8] data=0xf7000000 strb=0xf
+        beat[9] data=0xf7000000 strb=0xf
+        beat[10] data=0xf7000000 strb=0xf
+        beat[11] data=0x00000000 strb=0xf
+        beat[12] data=0x00000000 strb=0xf
+        beat[13] data=0x00000000 strb=0xf
+        beat[14] data=0x00000000 strb=0xf
+UVM_INFO ..	buvm/axi4_monitor.svh(130) @ 495000: uvm_test_top.env.agent.mon [MON] WRITE seen: AXI_WRITE id=173 addr=0xdf3a len=0(1 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0xcb817c7b strb=0x4
+UVM_INFO ..	buvm/axi4_monitor.svh(180) @ 535000: uvm_test_top.env.agent.mon [MON] READ  seen: AXI_READ id=173 addr=0xdf3a len=0(1 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0x00810000 strb=0xf
+UVM_INFO ..	buvm/axi4_monitor.svh(130) @ 705000: uvm_test_top.env.agent.mon [MON] WRITE seen: AXI_WRITE id=107 addr=0xafa0 len=13(14 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0xeddec692 strb=0x0
+        beat[1] data=0xd90155e4 strb=0x2
+        beat[2] data=0xde107ebb strb=0x4
+        beat[3] data=0xdfeb817f strb=0x0
+        beat[4] data=0xf4169ca8 strb=0x0
+        beat[5] data=0x227c2500 strb=0x0
+        beat[6] data=0xa96e9dd7 strb=0x4
+        beat[7] data=0xe1f5633b strb=0x8
+        beat[8] data=0xfb7d7ae4 strb=0x1
+        beat[9] data=0x077f1c93 strb=0x0
+        beat[10] data=0xc1e0e4ba strb=0x4
+        beat[11] data=0xef94178d strb=0x0
+        beat[12] data=0x29fb4193 strb=0x1
+        beat[13] data=0xeb4f8292 strb=0x2
+UVM_INFO ..	buvm/axi4_monitor.svh(180) @ 885000: uvm_test_top.env.agent.mon [MON] READ  seen: AXI_READ id=107 addr=0xafa0 len=13(14 beats) size=0(1B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0x00105500 strb=0xf
+        beat[1] data=0x00105500 strb=0xf
+        beat[2] data=0x00105500 strb=0xf
+        beat[3] data=0x00105500 strb=0xf
+        beat[4] data=0xe16e0000 strb=0xf
+        beat[5] data=0xe16e0000 strb=0xf
+        beat[6] data=0xe16e0000 strb=0xf
+        beat[7] data=0xe16e0000 strb=0xf
+        beat[8] data=0x00e000e4 strb=0xf
+        beat[9] data=0x00e000e4 strb=0xf
+        beat[10] data=0x00e000e4 strb=0xf
+        beat[11] data=0x00e000e4 strb=0xf
+        beat[12] data=0x00008293 strb=0xf
+        beat[13] data=0x00008293 strb=0xf
+UVM_INFO ..	buvm/axi4_monitor.svh(130) @ 1075000: uvm_test_top.env.agent.mon [MON] WRITE seen: AXI_WRITE id=58 addr=0xe70c len=14(15 beats) size=1(2B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0x8fee3c9e strb=0x0
+        beat[1] data=0xc9467580 strb=0x4
+        beat[2] data=0xc0619f9c strb=0x0
+        beat[3] data=0xee57fd0d strb=0x4
+        beat[4] data=0xaca43d16 strb=0x0
+        beat[5] data=0x2db0ffca strb=0xc
+        beat[6] data=0x3662adf4 strb=0x2
+        beat[7] data=0x3c9279b5 strb=0x4
+        beat[8] data=0xf6f7754a strb=0x1
+        beat[9] data=0xf6c44d90 strb=0x0
+        beat[10] data=0xaaea76c2 strb=0x1
+        beat[11] data=0xa39bb260 strb=0x4
+        beat[12] data=0x24754d5a strb=0x0
+        beat[13] data=0xe14d24b6 strb=0x0
+        beat[14] data=0xe02e2c15 strb=0x2
+UVM_INFO ..	buvm/axi4_monitor.svh(180) @ 1255000: uvm_test_top.env.agent.mon [MON] READ  seen: AXI_READ id=58 addr=0xe70c len=14(15 beats) size=1(2B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0x00460000 strb=0xf
+        beat[1] data=0x00460000 strb=0xf
+        beat[2] data=0x00570000 strb=0xf
+        beat[3] data=0x00570000 strb=0xf
+        beat[4] data=0x2db00000 strb=0xf
+        beat[5] data=0x2db00000 strb=0xf
+        beat[6] data=0x0092ad00 strb=0xf
+        beat[7] data=0x0092ad00 strb=0xf
+        beat[8] data=0x0000004a strb=0xf
+        beat[9] data=0x0000004a strb=0xf
+        beat[10] data=0x009b00c2 strb=0xf
+        beat[11] data=0x009b00c2 strb=0xf
+        beat[12] data=0x00000000 strb=0xf
+        beat[13] data=0x00000000 strb=0xf
+        beat[14] data=0x00002c00 strb=0xf
+UVM_INFO ..	buvm/axi4_monitor.svh(130) @ 1365000: uvm_test_top.env.agent.mon [MON] WRITE seen: AXI_WRITE id=94 addr=0x8b88 len=7(8 beats) size=1(2B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0xc67bbec0 strb=0x1
+        beat[1] data=0xafbb4f61 strb=0xc
+        beat[2] data=0xfcd56f72 strb=0x2
+        beat[3] data=0x0a90fca2 strb=0x4
+        beat[4] data=0x3d6a17c8 strb=0x0
+        beat[5] data=0x3ea168ac strb=0x4
+        beat[6] data=0xb2c7ac6a strb=0x1
+        beat[7] data=0x03e5d688 strb=0x4
+UVM_INFO ..	buvm/axi4_monitor.svh(180) @ 1485000: uvm_test_top.env.agent.mon [MON] READ  seen: AXI_READ id=94 addr=0x8b88 len=7(8 beats) size=1(2B) burst=AXI_INCR resp=AXI_OKAY
+        beat[0] data=0xafbb00c0 strb=0xf
+        beat[1] data=0xafbb00c0 strb=0xf
+        beat[2] data=0x00906f00 strb=0xf
+        beat[3] data=0x00906f00 strb=0xf
+        beat[4] data=0x00a10000 strb=0xf
+        beat[5] data=0x00a10000 strb=0xf
+        beat[6] data=0x00e5006a strb=0xf
+        beat[7] data=0x00e5006a strb=0xf
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(19968) @ 1775000: reporter [TEST_DONE] 'run' phase is ready to proceed to the 'extract' phase
+UVM_INFO ..	buvm/axi4_driver.svh(74) @ 1775000: uvm_test_top.env.agent.drv [DRV] outstanding on the bus: peak writes = 1, peak reads = 1 (max_outstanding = 1)
+UVM_INFO ..	buvm/axi4_coverage.svh(150) @ 1775000: uvm_test_top.env.cov [COV] 
+=========== AXI4 functional coverage ===========
+  bursts sampled : 10
+  ---------------------------------------------
+          cp_dir  100.00 %
+        cp_burst   33.33 %
+         cp_size   66.67 %
+          cp_len   75.00 %
+         cp_resp  100.00 %
+       cp_region   25.00 %
+         cp_strb   66.67 %
+  ---------------------------------------------
+    x_burst_size   22.22 %
+     x_burst_len   27.27 %
+     x_dir_burst   33.33 %
+  =============================================
+           TOTAL   54.95 %
+===============================================
+
+UVM_INFO ..	buvm/axi4_scoreboard.svh(72) @ 1775000: uvm_test_top.env.sb [SB] scoreboard: 5 write bursts, 5 read bursts, 53 beats checked, 0 byte mismatches
+UVM_INFO C:AMDDesignTooÿÿ‚6.1Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv(13673) @ 1775000: reporter [UVM/REPORT/SERVER] 
+--- UVM Report Summary ---
+
+** Report counts by severity
+UVM_INFO :   21
+UVM_WARNING :    0
+UVM_ERROR :    0
+UVM_FATAL :    0
+** Report counts by id
+[COV]     1
+[DRV]     2
+[MON]    10
+[NO_DPI_TSTNAME]     1
+[RNTST]     1
+[SB]     1
+[TEST]     1
+[TEST_DONE]     1
+[UVM/COMP/NAMECHECK]     1
+[UVM/RELNOTES]     1
+[UVMTOP]     1
+
+$finish called at time : 1775 ns : File "C:\AMDDesignTools\2026.1\Vivado/data/system_verilog/uvm_1.2/xlnx_uvm_package.sv" Line 18699
+exit
+INFO: [Common 17-206] Exiting xsim at Sat Aug  8 09:04:33 2026...

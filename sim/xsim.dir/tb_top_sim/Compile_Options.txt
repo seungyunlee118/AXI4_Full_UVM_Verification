@@ -1,0 +1,1 @@
+-debug "all" -L "uvm" -timescale "1ns/1ps" --cov_db_dir "." --cov_db_name "axi4_base_test" "tb_top" -s "tb_top_sim" 
