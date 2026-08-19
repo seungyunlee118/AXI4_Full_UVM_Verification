@@ -74,11 +74,7 @@ which way, the exact read data down to the byte, and whether the PLRU victim is
 dirty and must be written back (to which address, with which four beats) followed
 by the fill. Because the DUT is pipelined, a read miss can retire in the same
 cycle the next request is accepted, so read expectations are snapshotted when the
-request is issued and checked when the data comes back. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full pipeline, FSM and
-scoreboard diagrams, and the study notes under `docs/` for a file-by-file
-walkthrough.
-
+request is issued and checked when the data comes back. 
 ## Repository layout
 
 ```
@@ -103,9 +99,7 @@ sim/vivado/
   setup_env.sh          locates Vivado (PATH / VIVADO_ROOT / common install dirs)
   wsl_local.sh          mirror source to native FS for fast WSL2 builds
   files.f               compile order
-docs/
-  ARCHITECTURE.md       diagrams: block, pipeline, FSM, PLRU, forwarding, scoreboard
-  STUDY_*.md            file-by-file study notes
+
 ```
 
 ## Running
