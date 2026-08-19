@@ -1,165 +1,197 @@
-# AXI4-Full UVM Verification Environment
+# AXI4-Full UVM Verification
 
-A complete, coverage-driven **UVM testbench** for an **AXI4-Full memory slave**,
-built from scratch and run on **AMD Vivado XSim**. It includes a golden
-reference model, an SVA protocol checker, functional coverage, and a pipelined
-driver that exercises multiple outstanding transactions.
+A UVM testbench for an AXI4-Full memory-mapped slave, written from scratch in
+SystemVerilog. The environment drives constrained-random and directed AXI
+traffic, reconstructs every burst with a passive monitor, and checks the read
+data against an independent golden model. It closes 100% functional coverage and
+found a real addressing bug in the RTL.
 
-**It found a real bug in the RTL.**
+The design is simulated with AMD Vivado XSim on both Windows and Linux (WSL2). A
+second RTL revision that fixes the bug is checked by the same tests, so the suite
+also works as a regression guard.
 
-## Highlights
+## Design under test
 
-| | Result |
-|---|---|
-| 🐛 **Bug found** | `axi_ram.v` addresses **WRAP bursts like INCR** — wrapped beats are written past the end of the wrap window. Caught by the scoreboard, reproduced by a dedicated test. |
-| ✅ **Fix verified** | The *same unmodified test* passes on the upgraded `axi_ram_v2.v` — the bug is now a permanent regression guard. |
-| 📊 **Coverage** | **100 %** functional coverage (82 bursts, 269 beats checked), with structurally unreachable bins justified via `ignore_bins`. |
-| 🔍 **Protocol** | ~25 SVA assertions `bind`-ed into the testbench: handshake stability, payload stability, WLAST/RLAST position, illegal encodings. |
-| ⚡ **Outstanding** | Pipelined driver measures real bus concurrency: `axi_ram` peaks at **2**, `axi_ram_v2` sustains **4**. |
-| 🧪 **Regression** | 8 tests × 2 DUTs — all clean except the intended WRAP failure on v1. |
+The DUT is `axi_ram`, an AXI4-Full RAM slave from Alex Forencich's
+[verilog-axi](https://github.com/alexforencich/verilog-axi) library (5 channels:
+AW, W, B, AR, R). Default configuration is 32-bit data, 16-bit address, 8-bit ID.
+It uses one FSM for the write path and one for the read path.
 
-```
-=========== AXI4 functional coverage ===========
-  bursts sampled : 82
-          cp_dir  100.00 %      x_burst_size  100.00 %
-        cp_burst  100.00 %      x_burst_len   100.00 %
-         cp_size  100.00 %      x_dir_burst   100.00 %
-          cp_len  100.00 %
-         cp_resp  100.00 %
-       cp_region  100.00 %
-         cp_strb  100.00 %
-           TOTAL  100.00 %
-===============================================
-```
+`Axi_ram_v2.v` is a second revision that fixes the WRAP addressing bug described
+below and adds a queue-based front end for multiple outstanding transactions.
+Both revisions share the same port list, so a single testbench targets either one.
 
-## The bug, in one picture
-
-```
-WRAP write @0x0A08, 4 beats x 4 B   (wrap window 0x0A00..0x0A0F)
-
-  correct AXI : 0x0A08, 0x0A0C, 0x0A00, 0x0A04    <- wraps inside the window
-  axi_ram     : 0x0A08, 0x0A0C, 0x0A10, 0x0A14    <- keeps incrementing
-                                    ^^^^^^^^^^ outside the window
-```
-
-Reading the window back with **INCR** exposes it: `0x0A00`/`0x0A04` come back as
-zeros → **24 byte mismatches**.
-
-> A WRAP write followed by a WRAP read-back **passes** even on the broken DUT —
-> it is consistently wrong on both sides, so it reads from the same wrong places
-> it wrote to. Only an *asymmetric* check (write WRAP, read INCR) reveals it.
-> See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Known limitations of the original RTL (verification targets): WRAP bursts are
+addressed like INCR, and the response codes are hardwired to OKAY.
 
 ## Architecture
 
+<!-- Block diagram of the UVM environment. Drop the image at docs/architecture.png -->
+<img width="1121" height="711" alt="Image" src="https://github.com/user-attachments/assets/7d48465b-beb7-4f13-90ea-704ef5782539" />
+
+| Component | Purpose |
+|-----------|---------|
+| `axi4_seq_item` | One AXI burst: address, control, data and strobe arrays. Constrained for legal traffic (4 KB boundary, size alignment, WRAP lengths). |
+| `axi4_driver` | AXI master. One thread per channel, so several bursts can be in flight; write drives AW and W concurrently, then collects B. |
+| `axi4_monitor` | Passive. Rebuilds write and read bursts from the pins and broadcasts them on an analysis port. Handles overlapping bursts through per-phase FIFOs. |
+| `axi4_ref_model` | Golden byte-addressable memory, independent of the RTL. Models write strobes, narrow transfers, and correct FIXED/INCR/WRAP addressing. |
+| `axi4_scoreboard` | Subscribes to the monitor. Writes update the model; reads are compared byte by byte against it. |
+| `axi4_coverage` | Second monitor subscriber. Samples a covergroup and prints a per-coverpoint report. |
+| `axi4_agent`, `axi4_env` | Standard UVM containers for the agent (sequencer/driver/monitor) and the environment (agent, scoreboard, coverage). |
+| `axi4_sva` | Protocol assertions bound into the testbench without touching the RTL. |
+
+The monitor's analysis port fans out to two subscribers: the scoreboard answers
+"is the data correct", coverage answers "was it exercised". See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full diagram and the life of
+a transaction.
+
+## Repository layout
+
 ```
-             sequence ──▶ sequencer ──▶ driver ──▶ ┌───────────┐
-                                                   │  axi4_if  │──▶ DUT
-   scoreboard ◀── analysis port ── monitor ◀────── └───────────┘     ▲
-   coverage   ◀───────┘                                  SVA checker ┘
+rtl/
+  axi_ram.v            DUT revision 1 (original, has the WRAP bug)
+  Axi_ram_v2.v         DUT revision 2 (WRAP fixed, outstanding support)
+tb/
+  axi4_if.sv           AXI4 interface with clocking blocks and modports
+  axi4_sva.sv          SVA protocol checker (bound into tb_top)
+  axi4_pkg.sv          package: parameters, enums, class includes
+  tb_top.sv            top: interface + DUT + run_test()
+  uvm/                 sequence item, agent, driver, monitor, ref model,
+                       scoreboard, coverage, env, sequences, tests
+sim/
+  run_xsim.bat         Vivado XSim flow (Windows)
+  Makefile             Vivado XSim flow (Linux / WSL2)
+  wave*.tcl            waveform setups (all / write-path / read-path)
+  run.bat              Questa compile check
+dpi/
+  axi4_ref_model.c     golden memory in C
+  dpi_demo_tb.sv       DPI-C demonstration
+docs/
+  ARCHITECTURE.md      block diagram, transaction flow, design notes
+  PROJECT_LOG.md       development log, findings, cheat sheets
 ```
 
-| Component | Role |
-|-----------|------|
-| `axi4_seq_item` | One AXI burst; constraints for legal stimulus (4 KB, alignment, WRAP lengths) |
-| `axi4_driver` | Pipelined AXI master — one thread per channel, configurable outstanding depth |
-| `axi4_monitor` | Passive, **outstanding-aware** reconstruction of bursts from the pins |
-| `axi4_ref_model` | Golden byte-granular memory modelling strobes and *correct* burst addressing |
-| `axi4_scoreboard` | Compares every addressed read byte against the model |
-| `axi4_coverage` | Covergroup + per-coverpoint report |
-| `axi4_sva` | Protocol assertions, `bind`-ed in without touching RTL or TB |
+## Running
 
-Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ·
-Development log & findings: [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md) ·
-DUT analysis: [docs/axi_ram_dut_analysis.pdf](docs/axi_ram_dut_analysis.pdf)
+Linux (WSL2), using the Makefile:
 
-## Quick start
-
-```bat
-call "C:\AMDDesignTools\<version>\Vivado\settings64.bat"   :: once per shell
+```
+source /tools/Xilinx/<version>/Vivado/settings64.sh
 cd sim
-
-run_xsim.bat                          :: default test (write + read-back)
-run_xsim.bat axi4_cov_test            :: coverage closure run
-run_xsim.bat axi4_wrap_test           :: reproduces the bug on v1  -> 24 mismatches
-run_xsim.bat axi4_wrap_test v2        :: same test on v2           -> passes
-run_xsim.bat axi4_outstanding_test v2 :: 4 concurrent bursts on the bus
-run_xsim.bat axi4_base_test gui       :: waveforms
+make                          # default test
+make TEST=axi4_wrap_test DUT=v2
+make regress SEEDS="1 2 3"    # multi-seed regression
+make gui                      # waveforms (WSLg)
 ```
 
-Success = `[MON] WRITE/READ seen: …` lines plus `UVM_ERROR : 0` / `UVM_FATAL : 0`.
+Windows, using the batch script:
 
-### Tests
+```
+call "C:\AMDDesignTools\<version>\Vivado\settings64.bat"
+cd sim
+run_xsim.bat
+run_xsim.bat axi4_wrap_test v2
+run_xsim.bat axi4_base_test gui wr   :: write-path waveforms
+```
 
-| test | purpose |
-|------|---------|
-| `axi4_base_test` | random write + read-back (default) |
-| `axi4_write_test` / `axi4_read_test` | single-direction traffic |
+A run passes when the report shows `UVM_ERROR : 0` and the scoreboard reports
+zero byte mismatches.
+
+## Tests
+
+| Test | Description |
+|------|-------------|
+| `axi4_base_test` | random write followed by a read-back of the same region |
+| `axi4_write_test`, `axi4_read_test` | single-direction traffic |
 | `axi4_rand_test` | mixed random read/write |
 | `axi4_directed_test` | corner cases: single beat, max burst, 4 KB edge, narrow, FIXED |
-| `axi4_cov_test` | coverage closure — deterministic sweeps + random mix |
+| `axi4_cov_test` | coverage closure: deterministic sweeps plus a random mix |
 | `axi4_outstanding_test` | pipelined bursts; reports peak concurrency on the bus |
-| `axi4_wrap_test` | **reproduces the WRAP bug** (fails on v1 by design, passes on v2) |
+| `axi4_wrap_test` | reproduces the WRAP bug (fails on v1 by design, passes on v2) |
 
-Add `v2` to any command to target `axi_ram_v2` instead of `axi_ram`.
+Add `v2` to any command to target `Axi_ram_v2` instead of `axi_ram`.
 
-## Directory layout
+## Results
+
+Clean regression on both revisions reports zero errors and zero byte mismatches.
+The one intended exception is `axi4_wrap_test`, which fails on revision 1 and
+passes on revision 2.
+
+A four-beat write burst on the bus:
+
+<!-- write-path waveform capture -->
+![AXI4 write burst](docs/AXI4_W_Handshake.png)
+
+### Bug found: WRAP bursts addressed like INCR
+
+The original RTL increments the address linearly on every burst type except
+FIXED, so a WRAP burst never wraps inside its window and later beats land past
+the end of it.
+
+A write-then-read-back test using WRAP on both sides does not catch this: the DUT
+is wrong the same way when it writes and when it reads, so it reads back from the
+same wrong places it wrote to and the data appears to match. The failing case only
+shows up with an asymmetric check, writing with WRAP and reading the same window
+back with INCR:
 
 ```
-├── rtl/
-│   ├── axi_ram.v              # DUT v1 — AXI4-Full RAM slave (Alex Forencich, MIT)
-│   └── Axi_ram_v2.v           # DUT v2 — proper WRAP + outstanding transactions
-├── tb/
-│   ├── axi4_if.sv             # AXI4 interface (5 channels, clocking, modports)
-│   ├── axi4_sva.sv            # SVA protocol checker, bind-ed into tb_top
-│   ├── axi4_pkg.sv            # UVM package: widths, enums, class includes
-│   ├── tb_top.sv              # UVM top: interface + DUT + run_test()
-│   └── uvm/
-│       ├── axi4_seq_item.svh      # transaction (uvm_sequence_item)
-│       ├── axi4_agent_cfg.svh     # agent config (vif, active/passive, outstanding)
-│       ├── axi4_driver.svh        # pipelined AXI master driver
-│       ├── axi4_monitor.svh       # outstanding-aware monitor + analysis port
-│       ├── axi4_agent.svh         # agent (sequencer / driver / monitor)
-│       ├── axi4_ref_model.svh     # golden memory model
-│       ├── axi4_scoreboard.svh    # byte-level checker
-│       ├── axi4_coverage.svh      # functional coverage collector
-│       ├── axi4_env.svh           # environment
-│       ├── axi4_sequences.svh     # stimulus sequences
-│       └── axi4_base_test.svh     # tests
-├── sim/
-│   ├── run_xsim.bat           # Vivado XSim build + run (primary)
-│   ├── wave.tcl               # waveform setup for GUI runs
-│   ├── run.bat                # Questa compile-check
-│   └── cov_report.bat         # xcrg report (needs a PRO licence)
-└── docs/
-    ├── ARCHITECTURE.md
-    ├── PROJECT_LOG.md
-    └── axi_ram_dut_analysis.pdf
+WRAP write at 0x0A08, 4 beats x 4 B   (window 0x0A00..0x0A0F)
+  correct : 0x0A08, 0x0A0C, 0x0A00, 0x0A04
+  DUT     : 0x0A08, 0x0A0C, 0x0A10, 0x0A14   (runs past the window)
 ```
 
-## DUT summary
+Reading the window back with INCR shows 0x0A00 and 0x0A04 returning zero, which
+the scoreboard flags as 24 byte mismatches. `Axi_ram_v2` computes the wrap
+address correctly and passes the same test.
 
-- Full AXI4 slave: 5 channels (AW / W / B / AR / R)
-- `DATA_WIDTH=32`, `ADDR_WIDTH=16`, `STRB_WIDTH=4`, `ID_WIDTH=8`
-- Write path: 3-state FSM (IDLE / BURST / RESP); read path: 2-state FSM
-- Known limitations: WRAP addressing (v1), hardcoded `BRESP`/`RRESP` = `OKAY`,
-  `LOCK`/exclusive access ignored
+### Outstanding transactions
 
-## Notes on tooling
+The driver is pipelined and `max_outstanding` sets how many bursts may overlap.
+It counts how many were actually concurrent on the bus. Revision 1 peaks at 2
+(its FSM raises AWREADY in the same cycle it asserts BVALID), while `Axi_ram_v2`
+sustains the full depth of 4.
 
-Coverage collection and UVM run on the **free Vivado Basic tier**. Two things do
-not: Vivado's `xcrg` HTML coverage report (PRO tier only — the testbench prints
-its own per-coverpoint report instead), and Questa FPGA **Starter** Edition,
-which has no `svverification` licence and so cannot run `randomize()`, UVM or
-covergroups at all. `sim/run.bat` still uses Questa as a fast compile/syntax
-check. Details in [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md).
+### Functional coverage
 
-## License & attribution
+`axi4_cov_test` reaches 100% (82 bursts, 269 beats checked). Coverpoints cover
+direction, burst type, transfer size, burst length, 4 KB region and strobe
+pattern, with crosses on burst-by-size, burst-by-length and direction-by-burst.
+Constrained-random stimulus alone plateaued at 98.3%; directed sweeps closed the
+remaining bins. Structurally unreachable bins (single-beat WRAP, and error
+responses the DUT cannot produce) are excluded with `ignore_bins` and a comment,
+rather than left as open holes.
 
-- `rtl/axi_ram.v` is from Alex Forencich's
-  [verilog-axi](https://github.com/alexforencich/verilog-axi) project, under the
-  **MIT License**; the original copyright header is kept intact in the file.
-- `rtl/Axi_ram_v2.v` is a derivative work built on that module (proper WRAP
-  addressing + outstanding transaction support) and carries the same notice.
-- Everything else — the UVM environment, the SVA checker, the run scripts and
-  the documentation — was written for this project.
+## Protocol checking (SVA)
+
+`tb/axi4_sva.sv` is a standalone checker bound into the testbench. It covers the
+handshake rules (VALID held until READY, payload stable while stalled), reserved
+burst encodings, transfer size against the bus width, unknown values on qualified
+fields, and WLAST/RLAST landing on the beat implied by the length. The assertions
+were validated by inverting one and confirming it fired the expected number of
+times, so a passing run means the checks are actually active rather than vacuous.
+
+## C reference model over DPI-C
+
+`dpi/` contains the scoreboard's golden memory written in C and called from
+SystemVerilog through DPI-C. The SystemVerilog side keeps the AXI addressing and
+byte-lane logic; the C side owns the storage. `dpi_demo_tb.sv` is a self-contained
+demonstration of write-strobe masking and narrow-transfer word folding checked
+against the C model. It runs on Synopsys VCS and Siemens Questa (verified on EDA
+Playground) and on Vivado XSim for this small case. See [dpi/README.md].
+
+## Tooling notes
+
+The main environment runs on the free Vivado XSim tier. Two things do not work on
+that tier and are handled accordingly: the `xcrg` HTML coverage report needs a Pro
+license, so coverage is reported from the SystemVerilog coverage API instead; and
+DPI-C combined with the full UVM build hits an XSim code-generation defect (the
+DPI wrapper is emitted as C++ but compiled as C), so the DPI-C work is kept in the
+separate `dpi/` demo that runs on VCS and Questa.
+
+## License and attribution
+
+`rtl/axi_ram.v` is from Alex Forencich's verilog-axi project under the MIT
+License; the original copyright header is kept in the file. `Axi_ram_v2.v` is a
+derivative of that module and carries the same notice. The UVM environment, the
+SVA checker, the C reference model, the build scripts and the documentation were
+written for this project.
