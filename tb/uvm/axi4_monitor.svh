@@ -1,25 +1,4 @@
-//=============================================================
-// axi4_monitor — passive AXI observer (outstanding-aware)
-//
-// Each AXI channel is watched by its own thread, and the phases are
-// correlated through FIFOs:
-//
-//   AW handshake  -> push an address record onto aw_q
-//   W beats       -> fill the oldest record; on WLAST move it to w_done_q
-//   B handshake   -> pop the oldest completed write, attach RESP, publish
-//   AR handshake  -> push an address record onto ar_q
-//   R beats       -> fill the oldest record; on RLAST publish it
-//
-// A single sequential "AW then W then B" loop (the obvious first
-// implementation) silently DROPS bursts as soon as the DUT accepts a
-// second address while the first is still in flight — it is busy
-// collecting W beats and never sees the next AW handshake. That is why
-// this has to be channel-parallel like the driver.
-//
-// Assumption: responses come back in order (true for both DUTs here —
-// axi_ram_v2 explicitly documents in-order responses). ID-based
-// reordering would need per-ID FIFOs instead.
-//=============================================================
+
 `ifndef AXI4_MONITOR_SVH
 `define AXI4_MONITOR_SVH
 

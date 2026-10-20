@@ -1,21 +1,4 @@
-//=============================================================
-// axi4_sva — AXI4 protocol checker (SystemVerilog Assertions)
-//
-// Written as a standalone module and `bind`-ed into tb_top, so the
-// checks are injected without touching the interface, the testbench
-// or the RTL. This is the usual industry pattern: protocol checkers
-// live outside the design and can be attached/detached freely.
-//
-// IMPORTANT (XSim): properties with *untyped* formal arguments are
-// silently ignored by Vivado XSim —
-//    "untyped port "valid" found ... It will be ignored."
-// which makes the whole checker vacuous without any error. Every check
-// here is therefore expanded inline through a macro instead of a
-// parameterised `property`, and the checker was validated with a
-// deliberately failing self-test assertion.
-//
-// Compile with +define+AXI4_NO_SVA to remove the checker entirely.
-//=============================================================
+
 `ifndef AXI4_SVA_SV
 `define AXI4_SVA_SV
 `timescale 1ns/1ps
@@ -148,16 +131,8 @@ module axi4_sva #(
 
     //=========================================================
     // 6. WLAST / RLAST must land on the beat implied by the length
-    //
-    //    A queue of accepted AWLEN/ARLEN values tracks the expected
-    //    beat count, so this also holds for a DUT that accepts
-    //    several outstanding addresses (axi_ram_v2).
     //=========================================================
-    // NOTE: XSim cannot evaluate dynamic arrays/queues inside a concurrent
-    // assertion ("Dynamic array inside concurrent assertion. It will be
-    // ignored." — silently vacuous!). So the outstanding-address tracker is
-    // a STATIC circular buffer, and the assertions only reference plain
-    // scalar signals derived from it.
+  
     localparam int SVA_QDEPTH = 16;
 
     int unsigned aw_len_mem [SVA_QDEPTH];
@@ -231,11 +206,6 @@ endmodule
 
 //-------------------------------------------------------------
 // Inject the checker into the testbench top.
-//
-// Note: we bind into tb_top rather than into axi4_if, because a module
-// may not be instantiated inside an interface (XSim rejects that with
-// VRFC 10-3535). Binding at tb_top gives one checker instance that
-// works with either DUT, since both are wired to the same interface.
 //-------------------------------------------------------------
 bind tb_top axi4_sva u_axi4_sva (
     .clk     (clk),

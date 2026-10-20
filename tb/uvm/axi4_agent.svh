@@ -1,12 +1,4 @@
-//=============================================================
-// axi4_agent — container for one AXI interface's UVM components
-//
-//   UVM_ACTIVE  : sequencer + driver + monitor  (drives & observes)
-//   UVM_PASSIVE : monitor only                  (observes only)
-//
-// The sequencer is just a specialization of uvm_sequencer for our
-// item type, so a typedef is all it needs.
-//=============================================================
+
 `ifndef AXI4_AGENT_SVH
 `define AXI4_AGENT_SVH
 

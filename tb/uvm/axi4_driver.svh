@@ -1,29 +1,4 @@
-//=============================================================
-// axi4_driver — AXI master driver (pipelined)
-//
-// Each AXI channel runs in its own thread, so several bursts can be
-// in flight at once. That is what exercises a slave with multiple
-// outstanding transaction support (axi_ram_v2).
-//
-//   item_thread : pulls items from the sequencer into the channel
-//                 queues and calls item_done() immediately, which is
-//                 what lets the sequence run ahead of the bus
-//   aw_thread   : drives the write address channel
-//   w_thread    : drives the write data beats (same order as AW,
-//                 as AXI requires)
-//   b_thread    : accepts write responses
-//   ar_thread   : drives the read address channel
-//   r_thread    : accepts read data beats
-//
-// cfg.max_outstanding caps how many bursts may be in flight:
-//   1  -> strictly serialised, identical to a blocking driver
-//   >1 -> pipelined
-// A DUT that cannot accept a second address simply holds AWREADY low,
-// so this driver degrades gracefully against axi_ram (v1) too.
-//
-// All driving goes through the master clocking block, which applies
-// the correct sample/drive skews and avoids clock-edge races.
-//=============================================================
+
 `ifndef AXI4_DRIVER_SVH
 `define AXI4_DRIVER_SVH
 
@@ -42,10 +17,6 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
     // Bursts accepted from the sequencer but not yet finished on the bus
     protected int unsigned  n_inflight;
 
-    // Instrumentation: how many bursts were genuinely concurrent ON THE BUS
-    // (address accepted, response not yet received). A slave that only
-    // supports one outstanding transaction can never push these above 1,
-    // so these counters are the proof that pipelining actually happened.
     int unsigned wr_outstanding, wr_peak;
     int unsigned rd_outstanding, rd_peak;
 

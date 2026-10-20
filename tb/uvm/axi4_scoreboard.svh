@@ -1,14 +1,4 @@
-//=============================================================
-// axi4_scoreboard — the actual checker
-//
-// Subscribes to the monitor's analysis port:
-//   WRITE burst -> update the reference model
-//   READ  burst -> compare every addressed byte against the model
-//
-// Only the byte lanes that the beat actually addresses are compared:
-// for a narrow transfer the other lanes are don't-care in AXI, so
-// checking them would produce false failures on a different slave.
-//=============================================================
+
 `ifndef AXI4_SCOREBOARD_SVH
 `define AXI4_SCOREBOARD_SVH
 

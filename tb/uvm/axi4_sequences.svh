@@ -1,6 +1,4 @@
 //=============================================================
-// Sequences — the stimulus programs
-//
 //   axi4_base_seq     : common base + wr_then_rd() helper
 //   axi4_write_seq    : N random writes
 //   axi4_read_seq     : N random reads
@@ -8,11 +6,6 @@
 //   axi4_wr_rd_seq    : write a region then read it back (self-checking)
 //   axi4_directed_seq : hand-picked corner cases
 //   axi4_wrap_seq     : WRAP bursts — EXPECTED TO FAIL, documents a DUT bug
-//
-// NOTE: the general-purpose sequences deliberately exclude AXI_WRAP so
-// the normal regression is clean. The DUT increments WRAP addresses
-// linearly instead of wrapping, so WRAP traffic is isolated into its own
-// sequence/test that demonstrates the bug on purpose.
 //=============================================================
 `ifndef AXI4_SEQUENCES_SVH
 `define AXI4_SEQUENCES_SVH
@@ -126,11 +119,6 @@ endclass
 
 //---------------------------------------------------------------
 // Outstanding-transaction stimulus.
-//
-// Eight bursts over a fixed, non-overlapping address plan. The write
-// and read passes are separate sequences so the test can drain the bus
-// between them — otherwise a read could overtake a not-yet-completed
-// write (the AXI read and write channels are independent).
 //---------------------------------------------------------------
 class axi4_os_base_seq extends axi4_base_seq;
     `uvm_object_utils(axi4_os_base_seq)
@@ -182,12 +170,7 @@ class axi4_os_read_seq extends axi4_os_base_seq;
 endclass
 
 //---------------------------------------------------------------
-// Coverage-closure stimulus: wide random mix over ALL burst types,
-// sizes and lengths, plus explicit sweeps so the rarer bins get hit.
-//
-// NOTE: this sequence allows AXI_WRAP, so it can legitimately surface
-// the DUT's WRAP addressing bug as scoreboard mismatches. Those are
-// true positives, not test-bench noise.
+// Coverage-closure stimulus
 //---------------------------------------------------------------
 class axi4_cov_seq extends axi4_base_seq;
     `uvm_object_utils(axi4_cov_seq)
@@ -208,9 +191,8 @@ class axi4_cov_seq extends axi4_base_seq;
         end
     endtask
 
-    // Hit every (burst type x length class) combination deterministically.
-    // Random stimulus leaves holes here because FIXED/WRAP are weighted low,
-    // so the burst x length cross needs an explicit sweep to close.
+
+
     task burst_len_sweep();
         bit [AXI_ADDR_WIDTH-1:0] a = 16'h3000;
         // one length from each class: single / 2-4 / 5-8 / 9-16 beats
@@ -266,13 +248,7 @@ class axi4_wrap_seq extends axi4_base_seq;
     function new(string name = "axi4_wrap_seq"); super.new(name); endfunction
 
     //-----------------------------------------------------------
-    // Write with WRAP starting mid-window (so a wrap really happens),
-    // then read the WHOLE window back with INCR.
-    //
-    // Why not a plain WRAP write + WRAP read?  Because that hides the
-    // bug: the DUT is consistently wrong on both sides, so it reads
-    // from the same (wrong) places it wrote to and the data matches.
-    // Only an INCR read exposes where the bytes actually landed.
+    // Write with WRAP starting mid-window 
     //-----------------------------------------------------------
     task wrap_write_incr_read(bit [AXI_ADDR_WIDTH-1:0] a,
                               bit [7:0]                l,

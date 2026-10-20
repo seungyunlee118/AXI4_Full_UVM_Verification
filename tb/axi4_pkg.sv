@@ -1,10 +1,4 @@
-//=============================================================
-// axi4_pkg — the AXI4 UVM verification package
-//
-// Holds the bus-width parameters and protocol enums, then `include`s
-// every UVM class in dependency order. Compiling this one package
-// pulls in the whole environment.
-//=============================================================
+
 `ifndef AXI4_PKG_SV
 `define AXI4_PKG_SV
 `timescale 1ns/1ps
@@ -14,11 +8,6 @@ package axi4_pkg;
     import uvm_pkg::*;
     `include "uvm_macros.svh"
 
-    //---------------------------------------------------------
-    // Bus configuration (matches the DUT instantiation in tb_top).
-    // Fixed here to keep the sequence item non-parameterized, which
-    // keeps the UVM factory usage simple. A fully parameterized VIP
-    // is a possible later extension.
     //---------------------------------------------------------
     parameter int AXI_DATA_WIDTH = 32;
     parameter int AXI_ADDR_WIDTH = 16;

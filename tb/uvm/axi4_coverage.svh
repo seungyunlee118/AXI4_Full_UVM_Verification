@@ -1,11 +1,4 @@
-//=============================================================
-// axi4_coverage — functional coverage collector
-//
-// A uvm_subscriber sits on the monitor's analysis port and samples a
-// covergroup for every completed burst. Coverage answers "what did we
-// actually exercise?", which is a different question from the
-// scoreboard's "was it correct?".
-//=============================================================
+
 `ifndef AXI4_COVERAGE_SVH
 `define AXI4_COVERAGE_SVH
 

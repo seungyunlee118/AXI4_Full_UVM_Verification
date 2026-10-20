@@ -1,11 +1,4 @@
-//=============================================================
-// Tests — top of the UVM hierarchy
-//
-//   axi4_base_test : builds the env, grabs the virtual interface from
-//                    config_db, and runs a default stimulus sequence.
-//   Derived tests override get_seq() to swap in different stimulus,
-//   selected at run time with +UVM_TESTNAME=<name>.
-//=============================================================
+
 `ifndef AXI4_BASE_TEST_SVH
 `define AXI4_BASE_TEST_SVH
 

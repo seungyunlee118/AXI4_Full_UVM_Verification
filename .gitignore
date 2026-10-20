@@ -35,6 +35,7 @@ xsim.covdb/
 
 # ---- Personal study notes (kept local, not part of the public repo) ----
 docs/STUDY_GUIDE.md
+docs/INTERVIEW_PREP.md
 
 # ---- Editor / OS ----
 .vscode/
@@ -48,3 +49,4 @@ dpi/*.jou
 dpi/*.log
 dpi/*.pb
 dpi/*.wdb
+docs/AXI4_INTERVIEW_PREP.md

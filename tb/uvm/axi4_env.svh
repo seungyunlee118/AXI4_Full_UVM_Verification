@@ -1,10 +1,4 @@
-//=============================================================
-// axi4_env — top-level verification environment
-//
-// Holds the AXI agent and the scoreboard. The monitor's analysis
-// port is connected to the scoreboard here, so the checker sees
-// every burst that appears on the bus.
-//=============================================================
+
 `ifndef AXI4_ENV_SVH
 `define AXI4_ENV_SVH
 
@@ -35,8 +29,6 @@ class axi4_env extends uvm_env;
 
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
-        // Every burst the monitor reconstructs goes to both subscribers:
-        // the checker (is it correct?) and coverage (did we exercise it?).
         agent.mon.ap.connect(sb.ap_imp);
         agent.mon.ap.connect(cov.analysis_export);
     endfunction

@@ -22,6 +22,8 @@ class axi4_seq_item extends uvm_sequence_item;
     rand bit [AXI_STRB_WIDTH-1:0] strb [];
 
     // ---- Result captured from the DUT (not randomized) ----
+    // Driver: B/R 채널에서 받은 값을 여기에 저장, Monitor: B/R 채널에서 받은 값을 여기에 저장,
+    // Scoreboard: 이 값을 검사, 기본값 AXI_OKAY: 아직 응답 안 받은 상태를 나타냄
     axi_resp_e                    resp = AXI_OKAY;
 
     // Register with the factory so tests can create/override by type name.

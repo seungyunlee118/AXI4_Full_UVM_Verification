@@ -1,19 +1,10 @@
 /*
-
 Upgraded version of axi_ram.v with:
   1. Proper WRAP burst address calculation (wrap-around within window)
   2. Multiple outstanding write transactions (parameterizable depth)
   3. Multiple outstanding read transactions (parameterizable depth)
   4. Decoupled AW acceptance from W processing (queue-based)
   5. Decoupled B response from write completion (B queue)
-
-Based on axi_ram.v by Alex Forencich (MIT License).
-Enhancements added for verification learning purposes.
-
-Note: Response codes still hardcoded to OKAY (SLVERR/DECERR not modeled).
-      Exclusive access (LOCK) still ignored.
-      Responses are returned in-order (no ID-based reordering).
-
 */
 
 `resetall

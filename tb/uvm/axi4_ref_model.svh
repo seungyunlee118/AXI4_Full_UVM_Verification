@@ -1,16 +1,4 @@
-//=============================================================
-// axi4_ref_model — golden memory model
-//
-// Predicts what memory SHOULD contain if the DUT implements AXI
-// correctly. Deliberately independent of the DUT's implementation:
-//   - byte-granular (so write strobes are modelled exactly)
-//   - uses axi4_seq_item::beat_addr(), which implements *correct*
-//     FIXED / INCR / WRAP addressing
-//
-// The DUT increments the address linearly even for WRAP bursts, so
-// a WRAP write/read pair will disagree with this model — that is a
-// real DUT bug, not a modelling error.
-//=============================================================
+
 `ifndef AXI4_REF_MODEL_SVH
 `define AXI4_REF_MODEL_SVH
 
@@ -35,11 +23,6 @@ class axi4_ref_model extends uvm_object;
     endfunction
 
     //---------------------------------------------------------
-    // Apply an observed write burst to the model.
-    // Byte lane `lane` of the bus carries the byte at
-    // (bus-aligned address + lane) — same mapping the DUT uses
-    // when it indexes mem[addr >> 2] and writes byte `lane`.
-    //---------------------------------------------------------
     function void apply_write(axi4_seq_item tr);
         bit [AXI_ADDR_WIDTH-1:0] a, word_base;
         foreach (tr.data[i]) begin
@@ -53,9 +36,6 @@ class axi4_ref_model extends uvm_object;
 
     //---------------------------------------------------------
     // Expected bus word for beat i of a read burst.
-    // The DUT returns the whole 32-bit word at mem[addr>>2], so we
-    // assemble the full aligned word here; the scoreboard then only
-    // compares the lanes that are actually addressed by this beat.
     //---------------------------------------------------------
     function bit [AXI_DATA_WIDTH-1:0] expected_beat(axi4_seq_item tr, int i);
         bit [AXI_ADDR_WIDTH-1:0] a, word_base;

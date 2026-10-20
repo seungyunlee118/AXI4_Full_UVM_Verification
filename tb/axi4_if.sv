@@ -1,8 +1,4 @@
-//=============================================================
-// Week 2 - AXI4 interface
-// Bundles all 5 AXI channels, plus a driver clocking block
-// (master_cb) and a passive monitor clocking block (monitor_cb).
-//=============================================================
+
 `ifndef AXI4_IF_SV
 `define AXI4_IF_SV
 `timescale 1ns/1ps
@@ -62,6 +58,8 @@ interface axi4_if #(
     logic                  rvalid;
     logic                  rready;
 
+    // Clocking Block
+    
     //---------------------------------------------------------
     // Driver clocking block (acts as AXI master)
     //   drives *valid/payload, samples *ready and read data

@@ -1,19 +1,5 @@
-//=============================================================
-// tb_top — UVM top (Week 3)
-//   - generates clk/rst
-//   - instantiates the AXI interface and wires the DUT to it
-//   - publishes the virtual interface to the UVM env via config_db
-//   - launches run_test() (test chosen by +UVM_TESTNAME)
-//=============================================================
-`timescale 1ns/1ps
 
-//-------------------------------------------------------------
-// DUT selection. Both RTLs expose an identical AXI4 port list, so
-// only the module name changes:
-//   default        -> axi_ram      (original, has the WRAP bug)
-//   +define+DUT_V2 -> axi_ram_v2   (proper WRAP + outstanding support)
-// Pass "v2" to run_xsim.bat to build against the upgraded DUT.
-//-------------------------------------------------------------
+`timescale 1ns/1ps
 `ifdef DUT_V2
     `define DUT_MODULE axi_ram_v2
 `else
