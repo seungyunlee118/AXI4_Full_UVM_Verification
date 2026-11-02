@@ -29,6 +29,19 @@ sim/dfx_runtime.txt
 xsim.dir/
 .Xil/
 
+# ---- Cadence Xcelium build artifacts ----
+sim/xcelium/xcelium*.d/
+sim/xcelium/cov_work/
+sim/xcelium/regress/
+sim/xcelium/waves.shm/
+sim/xcelium/.simvision/
+sim/xcelium/*.log
+sim/xcelium/*.history
+sim/xcelium/*.key
+sim/xcelium/*.diag
+sim/xcelium/*.vcd
+sim/xcelium/xmsim.*
+
 # ---- Coverage ----
 *.ucdb
 cov_report/

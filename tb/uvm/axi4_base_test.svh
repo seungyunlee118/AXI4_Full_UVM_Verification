@@ -32,12 +32,13 @@ class axi4_base_test extends uvm_test;
         uvm_top.print_topology();
     endfunction
 
-    // End-of-test marker for the regression. A uvm_fatal ends the run before
-    // report_phase (while still printing "UVM_ERROR :    0"), so a run without
-    // this line did not finish, whatever its error count says.
+    // End-of-test marker for the regression (sim/judge.sh). A uvm_fatal ends
+    // the run before report_phase while still printing "UVM_ERROR :    0", so a
+    // run without this line did not finish, whatever its error count says.
+    // (Not "TEST_DONE": UVM prints a message with that ID on every normal run.)
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
-        `uvm_info("TEST", "TEST_DONE", UVM_NONE)
+        `uvm_info("TEST", "END_OF_TEST", UVM_NONE)
     endfunction
 
     // Derived tests override this to choose their stimulus.

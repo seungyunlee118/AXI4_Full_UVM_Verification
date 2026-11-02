@@ -6,9 +6,9 @@ traffic, reconstructs every burst with a passive monitor, and checks the read
 data against an independent golden model. It closes 100% functional coverage and
 found a real addressing bug in the RTL.
 
-The design is simulated with AMD Vivado XSim on both Windows and Linux (WSL2). A
-second RTL revision that fixes the bug is checked by the same tests, so the suite
-also works as a regression guard.
+The design is simulated with AMD Vivado XSim (Windows and Linux/WSL2) and with
+Cadence Xcelium 24.09. A second RTL revision that fixes the bug is checked by the
+same tests, so the suite also works as a regression guard.
 
 ## Design under test
 
@@ -58,10 +58,12 @@ tb/
   uvm/                 sequence item, agent, driver, monitor, ref model,
                        scoreboard, coverage, env, sequences, tests
 sim/
+  judge.sh             pass/fail rule for one run, shared by both regressions
   run_xsim.bat         Vivado XSim flow (Windows)
   Makefile             Vivado XSim flow (Linux / WSL2)
   wave*.tcl            waveform setups (all / write-path / read-path)
   run.bat              Questa compile check
+  xcelium/             Cadence Xcelium flow: Makefile, regress.sh, xrun.args
 dpi/
   axi4_ref_model.c     golden memory in C
   dpi_demo_tb.sv       DPI-C demonstration
@@ -84,6 +86,16 @@ make regress DUT=v2           # same, against Axi_ram_v2
 make gui                      # waveforms (WSLg)
 ```
 
+Cadence Xcelium, from `sim/xcelium`:
+
+```
+make                                  # default test, v1
+make TEST=axi4_wrap_test DUT=v2 SEED=7
+make XPROP=C                          # X-propagation build
+make regress                          # 8 tests x 5 seeds x both DUTs
+./regress.sh -s "1 7 42" -d v2        # other seeds / one DUT
+```
+
 Windows, using the batch script:
 
 ```
@@ -94,12 +106,12 @@ run_xsim.bat axi4_wrap_test v2
 run_xsim.bat axi4_base_test gui wr   :: write-path waveforms
 ```
 
-A run passes when it reaches the end of the test (`TEST_DONE`) with
-`UVM_ERROR : 0` and `UVM_FATAL : 0`. Checking errors alone is not enough: a
-`uvm_fatal` still prints `UVM_ERROR : 0` in its summary. Assertion failures are
-reported as `UVM_ERROR`s, so they fail the run like a scoreboard mismatch.
-`make regress` applies this rule to every test and seed and keeps a log per run
-in `sim/logs/`.
+A run passes when it reaches the end of the test (`END_OF_TEST`, printed in
+`report_phase`) with `UVM_ERROR : 0`, `UVM_FATAL : 0` and no simulator error.
+Checking errors alone is not enough: a `uvm_fatal` still prints
+`UVM_ERROR : 0` in its summary. Assertion failures are reported as
+`UVM_ERROR`s, so they fail the run like a scoreboard mismatch. The rule lives in
+`sim/judge.sh` and both regressions use it; each run keeps its own log.
 
 ## Tests
 
@@ -121,6 +133,12 @@ Clean regression on both revisions reports zero errors and zero byte mismatches.
 The one intended exception is `axi4_wrap_test`. On revision 1 the regression runs
 it as an expected failure, so it reports a problem if the test ever stops
 catching the bug. On revision 2 it runs as a regular test and guards the fix.
+
+On Xcelium the full regression runs 80 simulations (8 tests × 5 seeds × 2
+revisions), all with the expected result, and the same is true with `-xprop C`.
+Xcelium also reproduces the headline numbers independently: 24 byte mismatches
+in `axi4_wrap_test` on revision 1, and outstanding peaks of 2 on revision 1 and
+4 on revision 2.
 
 A four-beat write burst on the bus:
 
@@ -157,11 +175,17 @@ sustains the full depth of 4.
 
 ### Functional coverage
 
-`axi4_cov_test` reaches 100% (82 bursts, 269 beats checked). Coverpoints cover
-direction, burst type, transfer size, burst length, 4 KB region and strobe
-pattern, with crosses on burst-by-size, burst-by-length and direction-by-burst.
+`axi4_cov_test` reaches 100% on every seed (122 bursts; on Xcelium seed 1,
+278 beats checked). Coverpoints cover direction, burst type, transfer size,
+burst length, 4 KB region, strobe pattern and WRAP start position, with crosses
+on burst-by-size, burst-by-length and direction-by-burst.
 Constrained-random stimulus alone plateaued at 98.3%; directed sweeps closed the
-remaining bins. Structurally unreachable bins (single-beat WRAP, and error
+remaining bins.
+
+The first 100% was a single seed on XSim, and it did not hold. On Xcelium only 5
+of 12 seeds reached 100%: the 4 KB region and strobe-pattern bins were left to
+the random mix, and it did not always reach them. Directed sweeps now cover
+every region and every strobe shape, so closure no longer depends on the seed. Structurally unreachable bins (single-beat WRAP, and error
 responses the DUT cannot produce) are excluded with `ignore_bins` and a comment,
 rather than left as open holes.
 
@@ -202,6 +226,13 @@ license, so coverage is reported from the SystemVerilog coverage API instead; an
 DPI-C combined with the full UVM build hits an XSim code-generation defect (the
 DPI wrapper is emitted as C++ but compiled as C), so the DPI-C work is kept in the
 separate `dpi/` demo that runs on VCS and Questa.
+
+On Xcelium, covergroups are only sampled with `-coverage U`; without it every
+coverpoint reads 0% and the run still passes, so the flag is in `xrun.args`. On
+the lab host every run reports `*E,IMPDLL` (no glibc-devel for the DPI export
+stub), which does not affect batch results and is the one simulator message
+`judge.sh` tolerates. Xcelium also reports each failed assertion as
+`*E,ASRTST`, alongside the checker's own `[AXI_SVA]` error.
 
 ## License and attribution
 

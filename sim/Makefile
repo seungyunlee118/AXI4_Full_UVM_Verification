@@ -22,7 +22,6 @@ DUT    ?=
 SEEDS  ?= 1
 WAVE   ?= wave.tcl
 TOP     = tb_top
-SNAP    = tb_top_sim
 
 # axi_ram (default) vs axi_ram_v2
 ifeq ($(DUT),v2)
@@ -41,8 +40,9 @@ XVLOG   = xvlog --sv -L uvm $(INCDIR) $(DUTOPT)
 XELAB   = xelab -debug all -L uvm -timescale 1ns/1ps
 XSIM    = xsim
 
-# The elaboration snapshot depends on the DUT choice, so re-elaborate
-# whenever DUT changes by keying a stamp file off DUTNAME.
+# The elaboration snapshot bakes in the DUT, so each DUT gets its own
+# snapshot and stamp file - switching DUT can never reuse the other one.
+SNAP    = tb_top_sim_$(if $(DUTOPT),v2,v1)
 STAMP   = .build_$(if $(DUTOPT),v2,v1)
 
 # ---- default: build + run one test -------------------------
@@ -80,35 +80,24 @@ else
   XFAIL_TESTS    = axi4_wrap_test
 endif
 
-# A run counts as finished only if it printed TEST_DONE (report_phase) and has
-# no UVM_FATAL: a fatal still prints "UVM_ERROR :    0" in its summary. A
-# finished run passes if it also has no UVM_ERROR - assertion failures are
-# reported as UVM_ERRORs too, so they fail the run.
+# Verdicts come from judge.sh, the same rule the Xcelium regression uses:
+# a run must reach END_OF_TEST with no UVM_ERROR and no UVM_FATAL
+# (assertion failures are UVM_ERRORs too); an XFAIL test must fail with
+# scoreboard mismatches and nothing else.
 .PHONY: regress
 regress: $(STAMP)
-	@mkdir -p logs; fail=0; \
+	@. ./judge.sh; mkdir -p logs; fail=0; \
 	for t in $(REGRESS_TESTS) $(XFAIL_TESTS); do \
+	  case " $(XFAIL_TESTS) " in *" $$t "*) expect=xfail ;; *) expect=pass ;; esac; \
 	  for s in $(SEEDS); do \
 	    log=logs/$$t.seed$$s.log; \
-	    echo "--- $$t (seed $$s) ---"; \
 	    $(XSIM) $(SNAP) -runall -sv_seed $$s -testplusarg "UVM_TESTNAME=$$t" > $$log 2>&1; \
-	    grep -E "UVM_ERROR :|UVM_FATAL :|scoreboard:" $$log; \
-	    finished=0; clean=0; \
-	    if grep -q "TEST_DONE" $$log && grep -q "UVM_FATAL :    0" $$log; then finished=1; fi; \
-	    if [ $$finished -eq 1 ] && grep -q "UVM_ERROR :    0" $$log; then clean=1; fi; \
-	    case " $(XFAIL_TESTS) " in \
-	      *" $$t "*) \
-	        if [ $$finished -eq 1 ] && [ $$clean -eq 0 ] && grep -q "SB_MISMATCH" $$log \
-	           && ! grep -q "AXI_SVA" $$log; then echo "  XFAIL (expected)"; \
-	        else echo "  *** UNEXPECTED: $$t seed $$s should fail with SB_MISMATCH only ($$log) ***"; fail=1; fi ;; \
-	      *) \
-	        if [ $$clean -eq 1 ]; then echo "  PASS"; \
-	        else echo "  *** FAIL: $$t seed $$s ($$log) ***"; fail=1; fi ;; \
-	    esac; \
+	    verdict=$$(judge $$log $$expect) || fail=1; \
+	    printf "  %-24s seed %-4s %-6s %s\n" $$t $$s $$expect "$$verdict"; \
 	  done; \
 	done; \
 	if [ $$fail -eq 0 ]; then echo "=== REGRESSION PASS ==="; \
-	else echo "=== REGRESSION FAIL ==="; exit 1; fi
+	else echo "=== REGRESSION FAIL (logs in sim/logs/) ==="; exit 1; fi
 
 .PHONY: clean
 clean:
