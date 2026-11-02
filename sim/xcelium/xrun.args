@@ -1,0 +1,18 @@
+// ---------------------------------------------------------------------------
+// Build options shared by every xrun build (Makefile and regress.sh).
+// ---------------------------------------------------------------------------
+
+-uvm -uvmhome CDNS-1.2
+-sv
+-timescale 1ns/1ps
+-top tb_top
+
+// Covergroups are only sampled with functional coverage enabled. Without
+// this every coverpoint reads 0% - and the run still passes.
+-coverage U
+-covoverwrite
+
+// CGPIDF: reminder about option.per_instance (the covergroup sets it).
+// DPIEXP: the lab host cannot link the DPI export stub (see ../judge.sh).
+-nowarn CGPIDF
+-nowarn DPIEXP

@@ -386,7 +386,7 @@ passed silently.
 | gap | effect | fix |
 |-----|--------|-----|
 | SVA action blocks used `$error` | `$error` does not go through the UVM report server, so assertion failures never reached `UVM_ERROR` and the regression passed with assertions firing | report with `uvm_report_error("AXI_SVA", ...)` |
-| pass rule was only `UVM_ERROR : 0` | a `uvm_fatal` (e.g. no vif) still prints `UVM_ERROR : 0` in its summary, so a test that died in build counted as PASS | require `TEST_DONE` (printed in `report_phase`) and `UVM_FATAL : 0` too |
+| pass rule was only `UVM_ERROR : 0` | a `uvm_fatal` (e.g. no vif) still prints `UVM_ERROR : 0` in its summary, so a test that died in build counted as PASS | require an end-of-test marker (printed in `report_phase`; see below for why it is `END_OF_TEST`) and `UVM_FATAL : 0` too |
 | `axi4_wrap_test` not in the regression | nothing guarded the WRAP fix on v2 automatically | XFAIL on v1 (must fail with `SB_MISMATCH`, no SVA errors); regular test on v2 |
 | coverage counted the WRAP *encoding* | `axi4_cov_test` hit every WRAP bin on the buggy v1 with 0 mismatches: every directed WRAP started on its window base, where WRAP addresses equal INCR | `cp_wrap_pos` (at base / mid-window) and a directed mid-window WRAP in `axi4_cov_seq` |
 
@@ -396,16 +396,45 @@ judge. It now runs each one once and keeps a log per run in `sim/logs/`.
 Same lesson as Week 6: a check that cannot fail proves nothing. A pass rule is a
 check too, and it needs the same scrutiny.
 
-Status: written without access to a simulator. Before trusting it, confirm on
-XSim:
-1. `make regress` and `make regress DUT=v2` both end in `REGRESSION PASS`, with
-   `axi4_wrap_test` reported as XFAIL on v1 and PASS on v2.
-2. Invert one assertion (e.g. `|=> (vld)` → `|=> !(vld)` in `AXI_VALID_HELD`) and
-   confirm the regression now FAILS. Then revert it.
-3. `axi4_cov_test` still reaches 100% with `cp_wrap_pos` added. The extra
-   directed pair runs after the random mix, so the random stimulus is unchanged
-   and the counts should move from 82 bursts / 269 beats to 84 / 273. Update
-   the README once confirmed.
+### Verified on Cadence Xcelium 24.09 (2026-11-02)
+
+The branch was run on a lab host with Xcelium. A new `sim/xcelium/` flow was
+added, and the pass rule moved to `sim/judge.sh` so both regressions share it.
+
+| check | result |
+|-------|--------|
+| full regression, 8 tests × 5 seeds × v1/v2 | **80 / 80 as expected** (67 s); `axi4_wrap_test` XFAIL on v1, PASS on v2 |
+| same with `-xprop C` (seed 1) | 16 / 16 as expected |
+| WRAP bug on v1 | 24 byte mismatches, on every seed |
+| outstanding peak | v1 = 2, v2 = 4 |
+| `+UVM_TESTNAME=no_such_test` (a real `uvm_fatal`) | `FAIL FATAL`. The old rule would say PASS: the log has `UVM_ERROR :    0` |
+| `AXI_VALID_HELD` inverted | base and wrap tests `FAIL AXI_SVA` (5 firings in base) |
+| v2 wrap log judged as XFAIL | `FAIL UNEXPECTED_PASS` |
+
+Running on a second simulator found two more problems:
+
+1. **The end-of-test marker collided with UVM.** The first version used the
+   message `TEST_DONE`, but UVM's objection code prints `[TEST_DONE] 'run' phase
+   is ready to proceed...` on every normal run, so it proved nothing. The marker
+   is now `END_OF_TEST`, matched as `[TEST] END_OF_TEST`.
+2. **Coverage closure depended on the seed.** On Xcelium, `axi4_cov_test`
+   reached 100% on only 5 of 12 seeds (95.8% to 99.4% on the rest). `cp_region`
+   and `cp_strb` were left to the 40 random bursts. Added `region_sweep()` (one
+   burst per 4 KB region) and `strb_sweep()` (full, single-lane and empty
+   strobes). It is now 100% on every seed tried, on both DUTs (122 bursts).
+
+Other changes: `$dumpvars(0, tb_top)` instead of `$dumpvars`. The old call
+dumped the UVM package as well, and Xcelium warned (`PRPASZ`). Each DUT now gets
+its own XSim snapshot (`tb_top_sim_v1` / `_v2`), so switching DUT can never
+reuse the other one.
+
+Lesson: one simulator is one opinion. The marker collision and the seed-luck
+coverage both passed on XSim and only showed up on a second tool.
+
+**Still to do on XSim:** the XSim Makefile's `regress` now sources `judge.sh`.
+It was tested under `dash` with a stub `xsim` that prints UVM-style logs, but not
+with XSim itself. Run `make regress` and `make regress DUT=v2` once on XSim
+before relying on it.
 
 ## Vivado XSim cheatsheet (primary flow)
 

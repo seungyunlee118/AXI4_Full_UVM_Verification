@@ -181,7 +181,11 @@ class axi4_cov_seq extends axi4_base_seq;
         foreach_burst_size();
         // Deterministic sweep: every burst type x every length class
         burst_len_sweep();
-        // Then a broad random mix to fill length / region / strobe bins
+        // Deterministic: every 4 KB region and every strobe shape. Left to
+        // the random mix below, these closed on only 5 of 12 seeds.
+        region_sweep();
+        strb_sweep();
+        // Then a broad random mix on top of the closed model
         repeat (num) begin
             req = axi4_seq_item::type_id::create("req");
             start_item(req);
@@ -211,6 +215,41 @@ class axi4_cov_seq extends axi4_base_seq;
         wr_then_rd(a, 8'd3,  3'd2, AXI_WRAP); a += 16'h0100;
         wr_then_rd(a, 8'd7,  3'd2, AXI_WRAP); a += 16'h0100;
         wr_then_rd(a, 8'd15, 3'd2, AXI_WRAP);
+    endtask
+
+    // One short burst in each of the 16 4 KB regions (cp_region).
+    task region_sweep();
+        for (int r = 0; r < 16; r++)
+            wr_then_rd({r[3:0], 12'hE00}, 8'd1, 3'd2, AXI_INCR);
+    endtask
+
+    // Every strobe shape (cp_strb): all addressed lanes, one lane, none.
+    task strb_sweep();
+        bit [AXI_STRB_WIDTH-1:0] pat[3] = '{'1, AXI_STRB_WIDTH'(1), '0};
+        bit [AXI_ADDR_WIDTH-1:0] a = 16'h4F00;
+        foreach (pat[p]) begin
+            wr_strb_then_rd(a, pat[p]);
+            a += 16'h0010;
+        end
+    endtask
+
+    task wr_strb_then_rd(bit [AXI_ADDR_WIDTH-1:0] a, bit [AXI_STRB_WIDTH-1:0] st);
+        axi4_seq_item wr, rd;
+
+        wr = axi4_seq_item::type_id::create("wr_strb");
+        start_item(wr);
+        if (!wr.randomize() with { dir == AXI_WRITE; addr == a; len == 8'd1;
+                                   size == 3'd2; burst == AXI_INCR;
+                                   foreach (strb[j]) strb[j] == st; })
+            `uvm_error("RAND", "strobe write randomize() failed")
+        finish_item(wr);
+
+        rd = axi4_seq_item::type_id::create("rd_strb");
+        start_item(rd);
+        if (!rd.randomize() with { dir == AXI_READ; addr == a; len == 8'd1;
+                                   size == 3'd2; burst == AXI_INCR; id == wr.id; })
+            `uvm_error("RAND", "strobe read randomize() failed")
+        finish_item(rd);
     endtask
 
     // Starts mid-window, so the wrap point is crossed. This is coverage only:

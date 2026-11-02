@@ -97,7 +97,7 @@ module tb_top;
     // ---- Waveform dump ----
     initial begin
         $dumpfile("waves.vcd");
-        $dumpvars;
+        $dumpvars(0, tb_top);         // design only, not the UVM package
     end
 
 endmodule
