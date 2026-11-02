@@ -9,13 +9,13 @@
 `define AXI_VALID_HELD(nm, vld, rdy)                                     \
     nm: assert property (@(posedge clk) disable iff (rst)                 \
         ((vld) && !(rdy)) |=> (vld))                                      \
-        else $error("AXI-SVA: %s - VALID de-asserted before READY", `"nm`");
+        else uvm_report_error("AXI_SVA", $sformatf("AXI-SVA: %s - VALID de-asserted before READY", `"nm`"));
 
 // Payload must stay stable while the transfer is stalled.
 `define AXI_STABLE(nm, vld, rdy, sig)                                    \
     nm: assert property (@(posedge clk) disable iff (rst)                 \
         ((vld) && !(rdy)) |=> $stable(sig))                               \
-        else $error("AXI-SVA: %s - payload changed while stalled", `"nm`");
+        else uvm_report_error("AXI_SVA", $sformatf("AXI-SVA: %s - payload changed while stalled", `"nm`"));
 
 module axi4_sva #(
     parameter int DATA_WIDTH = 32,
@@ -58,6 +58,10 @@ module axi4_sva #(
     input logic                  rready
 );
 
+    // Failures go through the UVM report server (not $error), so they count
+    // as UVM_ERROR and fail the regression like any scoreboard mismatch.
+    import uvm_pkg::*;
+
 `ifndef AXI4_NO_SVA
 
     //=========================================================
@@ -96,38 +100,38 @@ module axi4_sva #(
     //=========================================================
     a_awburst_legal: assert property (@(posedge clk) disable iff (rst)
         awvalid |-> awburst != 2'b11)
-        else $error("AXI-SVA: AWBURST uses the reserved encoding 2'b11");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: AWBURST uses the reserved encoding 2'b11");
     a_arburst_legal: assert property (@(posedge clk) disable iff (rst)
         arvalid |-> arburst != 2'b11)
-        else $error("AXI-SVA: ARBURST uses the reserved encoding 2'b11");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: ARBURST uses the reserved encoding 2'b11");
 
     // Transfer size must fit the data bus
     a_awsize_fits: assert property (@(posedge clk) disable iff (rst)
         awvalid |-> ((1 << awsize) <= STRB_WIDTH))
-        else $error("AXI-SVA: AWSIZE exceeds the data bus width");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: AWSIZE exceeds the data bus width");
     a_arsize_fits: assert property (@(posedge clk) disable iff (rst)
         arvalid |-> ((1 << arsize) <= STRB_WIDTH))
-        else $error("AXI-SVA: ARSIZE exceeds the data bus width");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: ARSIZE exceeds the data bus width");
 
     //=========================================================
     // 4. No unknown (X/Z) on qualified control/payload
     //=========================================================
     a_aw_known: assert property (@(posedge clk) disable iff (rst)
         awvalid |-> !$isunknown({awaddr, awlen, awsize, awburst, awid}))
-        else $error("AXI-SVA: X/Z on the AW channel while AWVALID");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: X/Z on the AW channel while AWVALID");
     a_ar_known: assert property (@(posedge clk) disable iff (rst)
         arvalid |-> !$isunknown({araddr, arlen, arsize, arburst, arid}))
-        else $error("AXI-SVA: X/Z on the AR channel while ARVALID");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: X/Z on the AR channel while ARVALID");
     a_w_known: assert property (@(posedge clk) disable iff (rst)
         wvalid |-> !$isunknown({wstrb, wlast}))
-        else $error("AXI-SVA: X/Z on the W channel while WVALID");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: X/Z on the W channel while WVALID");
 
     //=========================================================
     // 5. No response may be issued while in reset
     //=========================================================
     a_no_resp_in_reset: assert property (@(posedge clk)
         rst |-> (!bvalid && !rvalid))
-        else $error("AXI-SVA: BVALID/RVALID asserted during reset");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: BVALID/RVALID asserted during reset");
 
     //=========================================================
     // 6. WLAST / RLAST must land on the beat implied by the length
@@ -184,21 +188,21 @@ module axi4_sva #(
     // counter/tracker values from before this cycle's updates.
     a_wlast_position: assert property (@(posedge clk) disable iff (rst)
         (wvalid && wready && wlast && aw_pending) |-> (w_beats == aw_head))
-        else $error("AXI-SVA: WLAST on beat %0d but AWLEN implies beat %0d",
-                    w_beats, aw_head);
+        else uvm_report_error("AXI_SVA", $sformatf("AXI-SVA: WLAST on beat %0d but AWLEN implies beat %0d",
+                    w_beats, aw_head));
 
     a_rlast_position: assert property (@(posedge clk) disable iff (rst)
         (rvalid && rready && rlast && ar_pending) |-> (r_beats == ar_head))
-        else $error("AXI-SVA: RLAST on beat %0d but ARLEN implies beat %0d",
-                    r_beats, ar_head);
+        else uvm_report_error("AXI_SVA", $sformatf("AXI-SVA: RLAST on beat %0d but ARLEN implies beat %0d",
+                    r_beats, ar_head));
 
     // A burst must not deliver more beats than its length allows
     a_w_no_overrun: assert property (@(posedge clk) disable iff (rst)
         (wvalid && wready && !wlast && aw_pending) |-> (w_beats < aw_head))
-        else $error("AXI-SVA: more W beats than AWLEN allows");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: more W beats than AWLEN allows");
     a_r_no_overrun: assert property (@(posedge clk) disable iff (rst)
         (rvalid && rready && !rlast && ar_pending) |-> (r_beats < ar_head))
-        else $error("AXI-SVA: more R beats than ARLEN allows");
+        else uvm_report_error("AXI_SVA", "AXI-SVA: more R beats than ARLEN allows");
 
 `endif // AXI4_NO_SVA
 

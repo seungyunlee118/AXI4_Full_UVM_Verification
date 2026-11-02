@@ -12,6 +12,7 @@
 #     make gui WAVE=wave_write.tcl  # GUI, write-path waveforms only
 #     make regress                  # run the whole test list, report pass/fail
 #     make regress SEEDS="1 2 3"    # multi-seed regression
+#     make regress DUT=v2           # same list + axi4_wrap_test as a normal test
 #     make clean
 # =============================================================
 
@@ -67,22 +68,43 @@ gui: $(STAMP)
 	$(XSIM) $(SNAP) -gui -tclbatch $(WAVE) -testplusarg "UVM_TESTNAME=$(TEST)"
 
 # ---- regression: every test x every seed -------------------
-# axi4_wrap_test is expected to FAIL on v1 (documents the DUT bug), so it is
-# not part of the clean list; run it explicitly with `make TEST=axi4_wrap_test`.
+# axi4_wrap_test reproduces the WRAP bug: on v1 it must FAIL with scoreboard
+# mismatches (XFAIL - if it stops failing, the test has lost its teeth); on v2
+# it must pass like any other test, because it is what guards the fix.
 REGRESS_TESTS = axi4_base_test axi4_directed_test axi4_write_test \
                 axi4_read_test axi4_rand_test axi4_cov_test axi4_outstanding_test
+ifeq ($(DUT),v2)
+  REGRESS_TESTS += axi4_wrap_test
+  XFAIL_TESTS    =
+else
+  XFAIL_TESTS    = axi4_wrap_test
+endif
 
+# A run counts as finished only if it printed TEST_DONE (report_phase) and has
+# no UVM_FATAL: a fatal still prints "UVM_ERROR :    0" in its summary. A
+# finished run passes if it also has no UVM_ERROR - assertion failures are
+# reported as UVM_ERRORs too, so they fail the run.
 .PHONY: regress
 regress: $(STAMP)
-	@fail=0; \
-	for t in $(REGRESS_TESTS); do \
+	@mkdir -p logs; fail=0; \
+	for t in $(REGRESS_TESTS) $(XFAIL_TESTS); do \
 	  for s in $(SEEDS); do \
+	    log=logs/$$t.seed$$s.log; \
 	    echo "--- $$t (seed $$s) ---"; \
-	    $(XSIM) $(SNAP) -runall -sv_seed $$s -testplusarg "UVM_TESTNAME=$$t" \
-	      | grep -E "UVM_ERROR :|scoreboard:" ; \
-	    if $(XSIM) $(SNAP) -runall -sv_seed $$s -testplusarg "UVM_TESTNAME=$$t" \
-	         | grep -q "UVM_ERROR :    0"; then echo "  PASS"; \
-	    else echo "  *** FAIL: $$t seed $$s ***"; fail=1; fi; \
+	    $(XSIM) $(SNAP) -runall -sv_seed $$s -testplusarg "UVM_TESTNAME=$$t" > $$log 2>&1; \
+	    grep -E "UVM_ERROR :|UVM_FATAL :|scoreboard:" $$log; \
+	    finished=0; clean=0; \
+	    if grep -q "TEST_DONE" $$log && grep -q "UVM_FATAL :    0" $$log; then finished=1; fi; \
+	    if [ $$finished -eq 1 ] && grep -q "UVM_ERROR :    0" $$log; then clean=1; fi; \
+	    case " $(XFAIL_TESTS) " in \
+	      *" $$t "*) \
+	        if [ $$finished -eq 1 ] && [ $$clean -eq 0 ] && grep -q "SB_MISMATCH" $$log \
+	           && ! grep -q "AXI_SVA" $$log; then echo "  XFAIL (expected)"; \
+	        else echo "  *** UNEXPECTED: $$t seed $$s should fail with SB_MISMATCH only ($$log) ***"; fail=1; fi ;; \
+	      *) \
+	        if [ $$clean -eq 1 ]; then echo "  PASS"; \
+	        else echo "  *** FAIL: $$t seed $$s ($$log) ***"; fail=1; fi ;; \
+	    esac; \
 	  done; \
 	done; \
 	if [ $$fail -eq 0 ]; then echo "=== REGRESSION PASS ==="; \
@@ -90,5 +112,5 @@ regress: $(STAMP)
 
 .PHONY: clean
 clean:
-	rm -rf xsim.dir .Xil *.jou *.log *.pb *.wdb *.wdb.wcfg xsim.covdb .build_v1 .build_v2
+	rm -rf xsim.dir .Xil *.jou *.log *.pb *.wdb *.wdb.wcfg xsim.covdb .build_v1 .build_v2 logs
 	@echo "cleaned"

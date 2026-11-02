@@ -5,7 +5,7 @@
 //   axi4_rand_seq     : N random bursts, mixed read/write
 //   axi4_wr_rd_seq    : write a region then read it back (self-checking)
 //   axi4_directed_seq : hand-picked corner cases
-//   axi4_wrap_seq     : WRAP bursts — EXPECTED TO FAIL, documents a DUT bug
+//   axi4_wrap_seq     : WRAP bursts — EXPECTED TO FAIL on v1 (documents the WRAP bug)
 //=============================================================
 `ifndef AXI4_SEQUENCES_SVH
 `define AXI4_SEQUENCES_SVH
@@ -189,6 +189,10 @@ class axi4_cov_seq extends axi4_base_seq;
                 `uvm_error("RAND", "coverage item randomize() failed")
             finish_item(req);
         end
+        // A WRAP that really wraps (the sweeps above all start on a window
+        // base). Last on purpose: v1 writes past the window, and no later
+        // random read may land on those bytes.
+        wrap_mid_window();
     endtask
 
 
@@ -207,6 +211,13 @@ class axi4_cov_seq extends axi4_base_seq;
         wr_then_rd(a, 8'd3,  3'd2, AXI_WRAP); a += 16'h0100;
         wr_then_rd(a, 8'd7,  3'd2, AXI_WRAP); a += 16'h0100;
         wr_then_rd(a, 8'd15, 3'd2, AXI_WRAP);
+    endtask
+
+    // Starts mid-window, so the wrap point is crossed. This is coverage only:
+    // the read-back is WRAP as well, which cannot expose a wrong wrap address.
+    // axi4_wrap_test checks that, with an INCR read-back of the window.
+    task wrap_mid_window();
+        wr_then_rd(16'h3C08, 8'd3, 3'd2, AXI_WRAP);   // window 0x3C00..0x3C0F
     endtask
 
     // Hit every legal (burst, size) combination for both directions.
