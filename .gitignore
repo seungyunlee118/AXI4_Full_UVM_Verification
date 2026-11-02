@@ -32,7 +32,7 @@ xsim.dir/
 # ---- Cadence Xcelium build artifacts ----
 sim/xcelium/xcelium*.d/
 sim/xcelium/cov_work/
-sim/xcelium/regress/
+sim/xcelium/regress*/
 sim/xcelium/waves.shm/
 sim/xcelium/.simvision/
 sim/xcelium/*.log
