@@ -5,6 +5,10 @@
 // How the write strobes of a burst look overall.
 typedef enum { STRB_NONE, STRB_PARTIAL, STRB_FULL } axi_strb_kind_e;
 
+// Where a WRAP burst starts inside its window. One that starts on the window
+// base never reaches the wrap point - its addresses are the same as INCR.
+typedef enum { WRAP_AT_BASE, WRAP_MID_WINDOW } axi_wrap_pos_e;
+
 class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
 
     `uvm_component_utils(axi4_coverage)
@@ -12,6 +16,7 @@ class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
     // Sampled item + derived values the covergroup reads.
     axi4_seq_item   tr;
     axi_strb_kind_e strb_kind;
+    axi_wrap_pos_e  wrap_pos;
 
     int unsigned n_sampled;
 
@@ -66,6 +71,13 @@ class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
             bins full    = {STRB_FULL};
         }
 
+        // Did a WRAP burst actually wrap? cp_burst only counts the encoding,
+        // which reached 100% on the buggy RTL without a single real wrap.
+        cp_wrap_pos: coverpoint wrap_pos iff (tr.burst == AXI_WRAP) {
+            bins at_base    = {WRAP_AT_BASE};
+            bins mid_window = {WRAP_MID_WINDOW};
+        }
+
         // Crosses — the interesting combinations
         x_burst_size : cross cp_burst, cp_size;
 
@@ -88,6 +100,7 @@ class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
     function void write(axi4_seq_item t);
         tr        = t;
         strb_kind = classify_strb(t);
+        wrap_pos  = classify_wrap(t);
         axi_cg.sample();
         n_sampled++;
     endfunction
@@ -105,6 +118,11 @@ class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
         if (all_zero) return STRB_NONE;
         if (all_full) return STRB_FULL;
         return STRB_PARTIAL;
+    endfunction
+
+    protected function axi_wrap_pos_e classify_wrap(axi4_seq_item t);
+        int unsigned window = (t.len + 1) << t.size;
+        return (t.addr % window == 0) ? WRAP_AT_BASE : WRAP_MID_WINDOW;
     endfunction
 
     //---------------------------------------------------------
@@ -128,6 +146,7 @@ class axi4_coverage extends uvm_subscriber #(axi4_seq_item);
             $sformatf("  %-14s %7.2f %%\n", "cp_resp",   axi_cg.cp_resp.get_inst_coverage()),
             $sformatf("  %-14s %7.2f %%\n", "cp_region", axi_cg.cp_region.get_inst_coverage()),
             $sformatf("  %-14s %7.2f %%\n", "cp_strb",   axi_cg.cp_strb.get_inst_coverage()),
+            $sformatf("  %-14s %7.2f %%\n", "cp_wrap_pos", axi_cg.cp_wrap_pos.get_inst_coverage()),
             "  ---------------------------------------------\n",
             $sformatf("  %-14s %7.2f %%\n", "x_burst_size", axi_cg.x_burst_size.get_inst_coverage()),
             $sformatf("  %-14s %7.2f %%\n", "x_burst_len",  axi_cg.x_burst_len.get_inst_coverage()),

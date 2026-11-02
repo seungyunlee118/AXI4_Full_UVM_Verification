@@ -79,7 +79,8 @@ source /tools/Xilinx/<version>/Vivado/settings64.sh
 cd sim
 make                          # default test
 make TEST=axi4_wrap_test DUT=v2
-make regress SEEDS="1 2 3"    # multi-seed regression
+make regress SEEDS="1 2 3"    # multi-seed regression (v1)
+make regress DUT=v2           # same, against Axi_ram_v2
 make gui                      # waveforms (WSLg)
 ```
 
@@ -93,8 +94,12 @@ run_xsim.bat axi4_wrap_test v2
 run_xsim.bat axi4_base_test gui wr   :: write-path waveforms
 ```
 
-A run passes when the report shows `UVM_ERROR : 0` and the scoreboard reports
-zero byte mismatches.
+A run passes when it reaches the end of the test (`TEST_DONE`) with
+`UVM_ERROR : 0` and `UVM_FATAL : 0`. Checking errors alone is not enough: a
+`uvm_fatal` still prints `UVM_ERROR : 0` in its summary. Assertion failures are
+reported as `UVM_ERROR`s, so they fail the run like a scoreboard mismatch.
+`make regress` applies this rule to every test and seed and keeps a log per run
+in `sim/logs/`.
 
 ## Tests
 
@@ -106,15 +111,16 @@ zero byte mismatches.
 | `axi4_directed_test` | corner cases: single beat, max burst, 4 KB edge, narrow, FIXED |
 | `axi4_cov_test` | coverage closure: deterministic sweeps plus a random mix |
 | `axi4_outstanding_test` | pipelined bursts; reports peak concurrency on the bus |
-| `axi4_wrap_test` | reproduces the WRAP bug (fails on v1 by design, passes on v2) |
+| `axi4_wrap_test` | reproduces the WRAP bug: expected failure (XFAIL) on v1, regular test on v2 |
 
 Add `v2` to any command to target `Axi_ram_v2` instead of `axi_ram`.
 
 ## Results
 
 Clean regression on both revisions reports zero errors and zero byte mismatches.
-The one intended exception is `axi4_wrap_test`, which fails on revision 1 and
-passes on revision 2.
+The one intended exception is `axi4_wrap_test`. On revision 1 the regression runs
+it as an expected failure, so it reports a problem if the test ever stops
+catching the bug. On revision 2 it runs as a regular test and guards the fix.
 
 A four-beat write burst on the bus:
 
@@ -159,6 +165,15 @@ remaining bins. Structurally unreachable bins (single-beat WRAP, and error
 responses the DUT cannot produce) are excluded with `ignore_bins` and a comment,
 rather than left as open holes.
 
+Coverage of the burst encoding turned out to be weaker than it looked. The
+coverage test reached 100% on revision 1, the buggy one, including every WRAP
+bin. Every directed WRAP burst started on its window base, and a WRAP burst that
+starts there has the same addresses as INCR, so it never wraps. `cp_wrap_pos`
+now records whether a WRAP burst starts on the window base or mid-window, and
+the sweep includes a burst that really wraps. Coverage still cannot replace the
+check: the sweep reads back with WRAP, and only `axi4_wrap_test`'s INCR
+read-back exposes the bug.
+
 ## Protocol checking (SVA)
 
 `tb/axi4_sva.sv` is a standalone checker bound into the testbench. It covers the
@@ -167,6 +182,8 @@ burst encodings, transfer size against the bus width, unknown values on qualifie
 fields, and WLAST/RLAST landing on the beat implied by the length. The assertions
 were validated by inverting one and confirming it fired the expected number of
 times, so a passing run means the checks are actually active rather than vacuous.
+Failures are reported through the UVM report server (`uvm_report_error`) rather
+than `$error`, so they count toward `UVM_ERROR` and fail the regression.
 
 ## C reference model over DPI-C
 

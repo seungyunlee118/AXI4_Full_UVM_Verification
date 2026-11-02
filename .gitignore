@@ -18,6 +18,7 @@ sim/xsim.dir/
 sim/.Xil/
 sim/*.jou
 sim/*.log
+sim/logs/
 sim/*.pb
 sim/*.wdb
 sim/webtalk*

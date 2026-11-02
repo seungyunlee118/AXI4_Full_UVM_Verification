@@ -378,6 +378,35 @@ with the single intended exception:
 | base / directed / write / read / rand / cov / outstanding | pass | pass |
 | **`axi4_wrap_test`** | **24 mismatches** 🐛 | **pass** ✅ |
 
+## Week 8 — closing the regression's blind spots
+
+A review of what `make regress` actually proved found four gaps. All four
+passed silently.
+
+| gap | effect | fix |
+|-----|--------|-----|
+| SVA action blocks used `$error` | `$error` does not go through the UVM report server, so assertion failures never reached `UVM_ERROR` and the regression passed with assertions firing | report with `uvm_report_error("AXI_SVA", ...)` |
+| pass rule was only `UVM_ERROR : 0` | a `uvm_fatal` (e.g. no vif) still prints `UVM_ERROR : 0` in its summary, so a test that died in build counted as PASS | require `TEST_DONE` (printed in `report_phase`) and `UVM_FATAL : 0` too |
+| `axi4_wrap_test` not in the regression | nothing guarded the WRAP fix on v2 automatically | XFAIL on v1 (must fail with `SB_MISMATCH`, no SVA errors); regular test on v2 |
+| coverage counted the WRAP *encoding* | `axi4_cov_test` hit every WRAP bin on the buggy v1 with 0 mismatches: every directed WRAP started on its window base, where WRAP addresses equal INCR | `cp_wrap_pos` (at base / mid-window) and a directed mid-window WRAP in `axi4_cov_seq` |
+
+The regression also ran each simulation twice, once to print and once to
+judge. It now runs each one once and keeps a log per run in `sim/logs/`.
+
+Same lesson as Week 6: a check that cannot fail proves nothing. A pass rule is a
+check too, and it needs the same scrutiny.
+
+Status: written without access to a simulator. Before trusting it, confirm on
+XSim:
+1. `make regress` and `make regress DUT=v2` both end in `REGRESSION PASS`, with
+   `axi4_wrap_test` reported as XFAIL on v1 and PASS on v2.
+2. Invert one assertion (e.g. `|=> (vld)` → `|=> !(vld)` in `AXI_VALID_HELD`) and
+   confirm the regression now FAILS. Then revert it.
+3. `axi4_cov_test` still reaches 100% with `cp_wrap_pos` added. The extra
+   directed pair runs after the random mix, so the random stimulus is unchanged
+   and the counts should move from 82 bursts / 269 beats to 84 / 273. Update
+   the README once confirmed.
+
 ## Vivado XSim cheatsheet (primary flow)
 
 ```

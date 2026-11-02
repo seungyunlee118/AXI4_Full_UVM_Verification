@@ -32,6 +32,14 @@ class axi4_base_test extends uvm_test;
         uvm_top.print_topology();
     endfunction
 
+    // End-of-test marker for the regression. A uvm_fatal ends the run before
+    // report_phase (while still printing "UVM_ERROR :    0"), so a run without
+    // this line did not finish, whatever its error count says.
+    function void report_phase(uvm_phase phase);
+        super.report_phase(phase);
+        `uvm_info("TEST", "TEST_DONE", UVM_NONE)
+    endfunction
+
     // Derived tests override this to choose their stimulus.
     virtual function axi4_base_seq get_seq();
         axi4_wr_rd_seq s = axi4_wr_rd_seq::type_id::create("seq");
@@ -106,7 +114,8 @@ class axi4_directed_test extends axi4_base_test;
 endclass
 
 // Coverage-closure test: wide stimulus to fill the covergroup bins.
-// May report WRAP mismatches (the real DUT bug) - those are true positives.
+// Its WRAP bursts are read back with WRAP, which cannot expose a wrong wrap
+// address, so it passes on v1 too; axi4_wrap_test is the WRAP check.
 class axi4_cov_test extends axi4_base_test;
     `uvm_component_utils(axi4_cov_test)
     function new(string name, uvm_component parent); super.new(name, parent); endfunction
@@ -123,8 +132,9 @@ endclass
 // Raises the driver's outstanding depth so several bursts overlap on
 // the bus, then checks the data still comes back correctly. The driver
 // reports the PEAK number of bursts that were genuinely concurrent:
-//   axi_ram    (v1) -> peak 1  (it accepts one address at a time)
-//   axi_ram_v2      -> peak >1 (queue-based, OUTSTANDING_DEPTH=4)
+//   axi_ram    (v1) -> peak 2  (its FSM raises AWREADY in the same cycle as
+//                               BVALID, so one extra address gets in)
+//   axi_ram_v2      -> peak 4  (queue-based, OUTSTANDING_DEPTH=4)
 // Writes and reads run as separate passes with a drain in between,
 // because the AXI read and write channels are independent and a read
 // must not overtake a write that has not completed yet.
@@ -157,11 +167,12 @@ class axi4_outstanding_test extends axi4_base_test;
 endclass
 
 //---------------------------------------------------------------
-// WRAP burst test — EXPECTED TO FAIL.
+// WRAP burst test — EXPECTED TO FAIL on v1, must PASS on v2.
 //
-// The DUT increments WRAP addresses linearly instead of wrapping them,
-// so the scoreboard reports mismatches. This test exists to document
-// and reproduce that bug, so it is NOT part of the clean regression.
+// axi_ram (v1) increments WRAP addresses linearly instead of wrapping
+// them, so the scoreboard reports mismatches. `make regress` runs it as
+// an expected failure (XFAIL) on v1 and as a normal test on v2, where it
+// guards the WRAP fix.
 //---------------------------------------------------------------
 class axi4_wrap_test extends axi4_base_test;
     `uvm_component_utils(axi4_wrap_test)
@@ -173,7 +184,7 @@ class axi4_wrap_test extends axi4_base_test;
     function void start_of_simulation_phase(uvm_phase phase);
         super.start_of_simulation_phase(phase);
         `uvm_info("TEST",
-            "axi4_wrap_test: UVM_ERRORs below are EXPECTED - they demonstrate the DUT's WRAP-burst bug",
+            "axi4_wrap_test: on axi_ram (v1) the UVM_ERRORs below are EXPECTED - they demonstrate the WRAP-burst bug",
             UVM_LOW)
     endfunction
 endclass
