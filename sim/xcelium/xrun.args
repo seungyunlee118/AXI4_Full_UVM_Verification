@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Build options shared by every xrun build (Makefile and regress.sh).
+// Build options shared by every xrun build (Makefile, regress.py, mutate.py).
 // ---------------------------------------------------------------------------
 
 -uvm -uvmhome CDNS-1.2
@@ -13,6 +13,6 @@
 -covoverwrite
 
 // CGPIDF: reminder about option.per_instance (the covergroup sets it).
-// DPIEXP: the lab host cannot link the DPI export stub (see ../judge.sh).
+// DPIEXP: the lab host cannot link the DPI export stub (see ../judge.py).
 -nowarn CGPIDF
 -nowarn DPIEXP

@@ -12,6 +12,11 @@ class axi4_agent_cfg extends uvm_object;
     //   >1 -> pipelined 
     int unsigned max_outstanding = 1;
 
+    // Percentage of cycles the driver holds BREADY / RREADY high.
+    //   100 -> always ready (no back-pressure)
+    //   <100 -> random stalls, so the slave has to hold its responses
+    int unsigned ready_pct = 100;
+
     `uvm_object_utils(axi4_agent_cfg)
 
     function new(string name = "axi4_agent_cfg");

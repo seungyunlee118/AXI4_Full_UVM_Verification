@@ -24,6 +24,11 @@ class axi4_base_test extends uvm_test;
 
         uvm_config_db#(axi4_agent_cfg)::set(this, "env", "cfg", cfg);
         env = axi4_env::type_id::create("env", this);
+
+        // Watchdog: a bus that hangs (e.g. a response that never comes) blocks
+        // the sequence before drain() is reached. Fail it as PH_TIMEOUT instead
+        // of running into UVM's 9200 s default. Above drain()'s own 1 ms guard.
+        uvm_top.set_timeout(2ms);
     endfunction
 
     // Print the component hierarchy once built — looks great in logs.
@@ -32,7 +37,7 @@ class axi4_base_test extends uvm_test;
         uvm_top.print_topology();
     endfunction
 
-    // End-of-test marker for the regression (sim/judge.sh). A uvm_fatal ends
+    // End-of-test marker for the regression (sim/judge.py). A uvm_fatal ends
     // the run before report_phase while still printing "UVM_ERROR :    0", so a
     // run without this line did not finish, whatever its error count says.
     // (Not "TEST_DONE": UVM prints a message with that ID on every normal run.)
@@ -163,6 +168,38 @@ class axi4_outstanding_test extends axi4_base_test;
         rd.start(env.agent.sqr);
         drain();
 
+        phase.drop_objection(this, "done");
+    endtask
+endclass
+
+//---------------------------------------------------------------
+// Stress test: queue overflow and response back-pressure.
+//
+// Keeps 8 bursts in flight, more than axi_ram_v2's queues hold
+// (OUTSTANDING_DEPTH = 4), and is ready for B and R only 30% of the time.
+// So the slave has to stall AWREADY / ARREADY, keep its credit for B, and
+// hold every response stable until it is taken. No other test gets there:
+// they keep at most 4 bursts in flight and are always ready. Added after the
+// mutation campaign showed those paths were never exercised.
+//---------------------------------------------------------------
+class axi4_stress_test extends axi4_base_test;
+    `uvm_component_utils(axi4_stress_test)
+    function new(string name, uvm_component parent); super.new(name, parent); endfunction
+
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        cfg.max_outstanding = 8;
+        cfg.ready_pct       = 30;
+    endfunction
+
+    task run_phase(uvm_phase phase);
+        axi4_stress_write_seq wr = axi4_stress_write_seq::type_id::create("wr");
+        axi4_stress_read_seq  rd = axi4_stress_read_seq::type_id::create("rd");
+        phase.raise_objection(this, "stress stimulus");
+        wr.start(env.agent.sqr);
+        drain();                     // writes land before any read-back
+        rd.start(env.agent.sqr);
+        drain();
         phase.drop_objection(this, "done");
     endtask
 endclass

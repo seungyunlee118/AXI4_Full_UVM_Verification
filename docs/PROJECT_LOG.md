@@ -431,10 +431,72 @@ reuse the other one.
 Lesson: one simulator is one opinion. The marker collision and the seed-luck
 coverage both passed on XSim and only showed up on a second tool.
 
-**Still to do on XSim:** the XSim Makefile's `regress` now sources `judge.sh`.
-It was tested under `dash` with a stub `xsim` that prints UVM-style logs, but not
-with XSim itself. Run `make regress` and `make regress DUT=v2` once on XSim
-before relying on it.
+XSim: the Makefile's `regress` uses the shared rule (now `judge.py`, Week 9).
+It was tested with a stub `xsim`, not with XSim itself; Xcelium is the
+verification of record.
+
+## Week 9 — Python automation and a mutation campaign
+
+The regression and the pass rule moved to Python, matching the other projects:
+
+- `sim/judge.py` replaces `judge.sh`. It is the same rule, and both the XSim
+  Makefile and the Xcelium scripts use it. The verdict now names the earliest
+  problem in the log, so a watchdog timeout caused by an assertion failure
+  reports the assertion.
+- `sim/xcelium/regress.py` replaces `regress.sh`. It builds once per DUT, runs
+  in parallel (`-j`), can stop at the first failure (`-k`), and writes
+  `results.txt` and a JUnit `results.xml`. 90 runs take 31 s, against 67 s for
+  the sequential bash version.
+- `sim/xcelium/mutate.py` is a bug-injection campaign on `Axi_ram_v2.v`: 25
+  single-substitution mutants, a baseline that must pass, and KILLED /
+  SURVIVED / INVALID / ERROR per mutant.
+
+A watchdog went into `axi4_base_test` first (`uvm_top.set_timeout(2ms)`).
+A mutant that leaves a burst unfinished blocks the sequence before `drain()`
+is reached. Without the watchdog the run would sit at UVM's 9200 s default
+until the wall-clock limit, and count as a tool error instead of a detection.
+
+### First campaign: 15 / 25 (60%)
+
+The 10 survivors fell into three groups:
+
+| survivors | gap |
+|-----------|-----|
+| R01–R04: SLVERR responses, BID/RID = 0 | response codes and IDs were never checked; the monitor did not even capture BID/RID |
+| Q04, Q05, D05: B/R retired without READY, R data changing while stalled | BREADY/RREADY were tied high, so no slave stall path ever ran; no `bid`/`rid`/`rdata` stability checks |
+| Q01–Q03: AW/AR queue overflow, no B credit check | at most 4 bursts in flight, exactly v2's queue depth, so the queues could never overflow |
+
+### Fixes
+
+- Scoreboard checks that every burst is answered OKAY (`SB_RESP`). The
+  monitor keeps the first non-OKAY beat of a read.
+- SVA (32 → 38 assertions): `a_bid_in_order`, `a_rid_in_order`,
+  `a_b_after_wlast`, and stability checks on `bid`, `rid` and `rdata`. The
+  messages print `$sampled()` values. Before, they printed post-edge values,
+  e.g. `BID 0xx`.
+- Driver: a `ready_pct` knob for random BREADY/RREADY (default 100, so the
+  existing tests are unchanged). Completions are counted on VALID && READY.
+- New `axi4_stress_test`: 32 short writes, then 32 reads, 8 in flight,
+  30% ready. v2 reaches 8 writes and 6 reads in flight; it passes on both DUTs.
+
+### Second campaign: 25 / 25 (100%)
+
+Every survivor is killed by the check that was missing. Q01 shows how the
+checks combine: overflowing the AW queue drops a write, and the next B comes
+back with the wrong ID (`a_bid_in_order`). Mutant A06 (read-side WRAP base) is
+killed only by the mid-window WRAP burst added in Week 8. The full table is in
+`docs/MUTATION_REPORT.md`.
+
+Final regression on Xcelium: 90 / 90 as expected (9 tests × 5 seeds × v1/v2),
+cov_test at 100% on every run, and `-xprop C` passing.
+
+Lesson: the same as the L1 cache project. A green regression with 100%
+coverage said nothing about responses, IDs or back-pressure. Injecting bugs is
+what showed which checks did not exist.
+
+XSim was not rerun for these changes. Cadence Xcelium is the verification of
+record. The XSim Makefile's `regress` uses the same `judge.py` and was checked
+with a stub `xsim`.
 
 ## Vivado XSim cheatsheet (primary flow)
 

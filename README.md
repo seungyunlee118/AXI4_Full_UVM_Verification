@@ -4,7 +4,9 @@ A UVM testbench for an AXI4-Full memory-mapped slave, written from scratch in
 SystemVerilog. The environment drives constrained-random and directed AXI
 traffic, reconstructs every burst with a passive monitor, and checks the read
 data against an independent golden model. It closes 100% functional coverage and
-found a real addressing bug in the RTL.
+found a real addressing bug in the RTL. A bug-injection campaign then measures
+the testbench itself: it catches 25 of 25 deliberately injected RTL bugs, up
+from 15 on the first run (see [docs/MUTATION_REPORT.md](docs/MUTATION_REPORT.md)).
 
 The design is simulated with AMD Vivado XSim (Windows and Linux/WSL2) and with
 Cadence Xcelium 24.09. A second RTL revision that fixes the bug is checked by the
@@ -58,12 +60,12 @@ tb/
   uvm/                 sequence item, agent, driver, monitor, ref model,
                        scoreboard, coverage, env, sequences, tests
 sim/
-  judge.sh             pass/fail rule for one run, shared by both regressions
+  judge.py             pass/fail rule for one run, shared by both regressions
   run_xsim.bat         Vivado XSim flow (Windows)
   Makefile             Vivado XSim flow (Linux / WSL2)
   wave*.tcl            waveform setups (all / write-path / read-path)
   run.bat              Questa compile check
-  xcelium/             Cadence Xcelium flow: Makefile, regress.sh, xrun.args
+  xcelium/             Cadence Xcelium flow: Makefile, regress.py, mutate.py
 dpi/
   axi4_ref_model.c     golden memory in C
   dpi_demo_tb.sv       DPI-C demonstration
@@ -92,8 +94,10 @@ Cadence Xcelium, from `sim/xcelium`:
 make                                  # default test, v1
 make TEST=axi4_wrap_test DUT=v2 SEED=7
 make XPROP=C                          # X-propagation build
-make regress                          # 8 tests x 5 seeds x both DUTs
-./regress.sh -s "1 7 42" -d v2        # other seeds / one DUT
+make regress                          # python3 regress.py: 9 tests x 5 seeds x both DUTs
+python3 regress.py -s 1 7 42 -d v2    # other seeds / one DUT
+python3 regress.py -x C -j 8          # X-propagation build, 8 runs at a time
+make mutate                           # python3 mutate.py: bug-injection campaign
 ```
 
 Windows, using the batch script:
@@ -111,7 +115,8 @@ A run passes when it reaches the end of the test (`END_OF_TEST`, printed in
 Checking errors alone is not enough: a `uvm_fatal` still prints
 `UVM_ERROR : 0` in its summary. Assertion failures are reported as
 `UVM_ERROR`s, so they fail the run like a scoreboard mismatch. The rule lives in
-`sim/judge.sh` and both regressions use it; each run keeps its own log.
+`sim/judge.py` and both regressions use it; each run keeps its own log, and
+`regress.py` also writes a JUnit `results.xml`.
 
 ## Tests
 
@@ -123,6 +128,7 @@ Checking errors alone is not enough: a `uvm_fatal` still prints
 | `axi4_directed_test` | corner cases: single beat, max burst, 4 KB edge, narrow, FIXED |
 | `axi4_cov_test` | coverage closure: deterministic sweeps plus a random mix |
 | `axi4_outstanding_test` | pipelined bursts; reports peak concurrency on the bus |
+| `axi4_stress_test` | 8 bursts in flight (more than v2's queues hold), BREADY/RREADY high only 30% of cycles |
 | `axi4_wrap_test` | reproduces the WRAP bug: expected failure (XFAIL) on v1, regular test on v2 |
 
 Add `v2` to any command to target `Axi_ram_v2` instead of `axi_ram`.
@@ -134,11 +140,28 @@ The one intended exception is `axi4_wrap_test`. On revision 1 the regression run
 it as an expected failure, so it reports a problem if the test ever stops
 catching the bug. On revision 2 it runs as a regular test and guards the fix.
 
-On Xcelium the full regression runs 80 simulations (8 tests × 5 seeds × 2
-revisions), all with the expected result, and the same is true with `-xprop C`.
+On Xcelium the full regression runs 90 simulations (9 tests × 5 seeds × 2
+revisions) in about 30 s, all with the expected result. The same is true with
+`-xprop C`.
 Xcelium also reproduces the headline numbers independently: 24 byte mismatches
 in `axi4_wrap_test` on revision 1, and outstanding peaks of 2 on revision 1 and
 4 on revision 2.
+
+### Testing the testbench: mutation campaign
+
+`sim/xcelium/mutate.py` injects one bug at a time into `Axi_ram_v2.v` and
+reruns the regression. It uses 25 mutants across address generation, the data
+path, burst length and LAST, response codes and IDs, and queue and READY flow
+control. The first run killed 15 (60%). The 10 survivors showed three things
+the testbench never did:
+
+- it never checked response codes or IDs;
+- it never stalled BREADY or RREADY;
+- it never had more bursts in flight than the slave's queues hold.
+
+After adding the response checks, ID-ordering and stability assertions, random
+back-pressure and `axi4_stress_test`, it kills all 25. Details are in
+[docs/MUTATION_REPORT.md](docs/MUTATION_REPORT.md).
 
 A four-beat write burst on the bus:
 
@@ -203,7 +226,9 @@ read-back exposes the bug.
 `tb/axi4_sva.sv` is a standalone checker bound into the testbench. It covers the
 handshake rules (VALID held until READY, payload stable while stalled), reserved
 burst encodings, transfer size against the bus width, unknown values on qualified
-fields, and WLAST/RLAST landing on the beat implied by the length. The assertions
+fields, WLAST/RLAST landing on the beat implied by the length, no B before
+WLAST, and BID/RID matching the oldest open request (both DUTs complete in
+order). There are 38 assertions in all. The assertions
 were validated by inverting one and confirming it fired the expected number of
 times, so a passing run means the checks are actually active rather than vacuous.
 Failures are reported through the UVM report server (`uvm_report_error`) rather
@@ -231,7 +256,7 @@ On Xcelium, covergroups are only sampled with `-coverage U`; without it every
 coverpoint reads 0% and the run still passes, so the flag is in `xrun.args`. On
 the lab host every run reports `*E,IMPDLL` (no glibc-devel for the DPI export
 stub), which does not affect batch results and is the one simulator message
-`judge.sh` tolerates. Xcelium also reports each failed assertion as
+`judge.py` tolerates. Xcelium also reports each failed assertion as
 `*E,ASRTST`, alongside the checker's own `[AXI_SVA]` error.
 
 ## License and attribution

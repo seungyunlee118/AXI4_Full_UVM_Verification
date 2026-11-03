@@ -152,7 +152,9 @@ class axi4_monitor extends uvm_monitor;
                     tr = ar_q[0];
                     if (beat <= tr.len)
                         tr.data[beat] = vif.monitor_cb.rdata;
-                    tr.resp = axi_resp_e'(vif.monitor_cb.rresp);
+                    // Keep the first non-OKAY beat: a read fails if any beat does.
+                    if (tr.resp == AXI_OKAY)
+                        tr.resp = axi_resp_e'(vif.monitor_cb.rresp);
                     if (vif.monitor_cb.rlast) begin
                         void'(ar_q.pop_front());
                         `uvm_info("MON", $sformatf("READ  seen: %s", tr.convert2string()),

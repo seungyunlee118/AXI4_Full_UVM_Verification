@@ -33,6 +33,9 @@ xsim.dir/
 sim/xcelium/xcelium*.d/
 sim/xcelium/cov_work/
 sim/xcelium/regress*/
+sim/xcelium/mutants/
+sim/__pycache__/
+sim/xcelium/__pycache__/
 sim/xcelium/waves.shm/
 sim/xcelium/.simvision/
 sim/xcelium/*.log
