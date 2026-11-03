@@ -1,4 +1,4 @@
-# Sourced by the Makefile and regress.sh. Puts Xcelium on PATH if it is not
+# Sourced by the Makefile. Puts Xcelium on PATH if it is not
 # there already. Point XCELIUM_HOME at another install to override.
 if ! command -v xrun >/dev/null 2>&1; then
     XCELIUM_HOME=${XCELIUM_HOME:-/usr/local/cadence/XCELIUM2409}

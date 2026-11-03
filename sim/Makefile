@@ -72,7 +72,8 @@ gui: $(STAMP)
 # mismatches (XFAIL - if it stops failing, the test has lost its teeth); on v2
 # it must pass like any other test, because it is what guards the fix.
 REGRESS_TESTS = axi4_base_test axi4_directed_test axi4_write_test \
-                axi4_read_test axi4_rand_test axi4_cov_test axi4_outstanding_test
+                axi4_read_test axi4_rand_test axi4_cov_test axi4_outstanding_test \
+                axi4_stress_test
 ifeq ($(DUT),v2)
   REGRESS_TESTS += axi4_wrap_test
   XFAIL_TESTS    =
@@ -80,19 +81,19 @@ else
   XFAIL_TESTS    = axi4_wrap_test
 endif
 
-# Verdicts come from judge.sh, the same rule the Xcelium regression uses:
+# Verdicts come from judge.py, the same rule the Xcelium regression uses:
 # a run must reach END_OF_TEST with no UVM_ERROR and no UVM_FATAL
 # (assertion failures are UVM_ERRORs too); an XFAIL test must fail with
 # scoreboard mismatches and nothing else.
 .PHONY: regress
 regress: $(STAMP)
-	@. ./judge.sh; mkdir -p logs; fail=0; \
+	@mkdir -p logs; fail=0; \
 	for t in $(REGRESS_TESTS) $(XFAIL_TESTS); do \
 	  case " $(XFAIL_TESTS) " in *" $$t "*) expect=xfail ;; *) expect=pass ;; esac; \
 	  for s in $(SEEDS); do \
 	    log=logs/$$t.seed$$s.log; \
 	    $(XSIM) $(SNAP) -runall -sv_seed $$s -testplusarg "UVM_TESTNAME=$$t" > $$log 2>&1; \
-	    verdict=$$(judge $$log $$expect) || fail=1; \
+	    verdict=$$(python3 judge.py $$log --expect $$expect) || fail=1; \
 	    printf "  %-24s seed %-4s %-6s %s\n" $$t $$s $$expect "$$verdict"; \
 	  done; \
 	done; \

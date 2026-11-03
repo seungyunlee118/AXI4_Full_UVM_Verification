@@ -11,7 +11,7 @@ class axi4_scoreboard extends uvm_scoreboard;
 
     axi4_ref_model ref_model;
 
-    int unsigned n_writes, n_reads, n_beats, n_mismatch;
+    int unsigned n_writes, n_reads, n_beats, n_mismatch, n_bad_resp;
 
     function new(string name, uvm_component parent);
         super.new(name, parent);
@@ -25,6 +25,13 @@ class axi4_scoreboard extends uvm_scoreboard;
 
     // Called by the analysis port for every completed burst.
     function void write(axi4_seq_item tr);
+        // Every access is legal and inside the 64 KB memory, so OKAY is the
+        // only correct response (the DUT has no error conditions).
+        if (tr.resp != AXI_OKAY) begin
+            n_bad_resp++;
+            `uvm_error("SB_RESP", $sformatf("%s burst answered %s, expected OKAY: addr=0x%04h len=%0d",
+                       tr.dir.name(), tr.resp.name(), tr.addr, tr.len))
+        end
         if (tr.dir == AXI_WRITE) begin
             ref_model.apply_write(tr);
             n_writes++;
@@ -58,8 +65,8 @@ class axi4_scoreboard extends uvm_scoreboard;
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
         `uvm_info("SB", $sformatf(
-            "scoreboard: %0d write bursts, %0d read bursts, %0d beats checked, %0d byte mismatches",
-            n_writes, n_reads, n_beats, n_mismatch), UVM_LOW)
+            "scoreboard: %0d write bursts, %0d read bursts, %0d beats checked, %0d byte mismatches, %0d bad responses",
+            n_writes, n_reads, n_beats, n_mismatch, n_bad_resp), UVM_LOW)
     endfunction
 
 endclass

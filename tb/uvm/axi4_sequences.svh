@@ -170,6 +170,46 @@ class axi4_os_read_seq extends axi4_os_base_seq;
 endclass
 
 //---------------------------------------------------------------
+// Stress stimulus: many short bursts, so the slave's queues fill up.
+// Each burst gets its own 64-byte slot from 0x6000 (fits any 1-4 beat
+// burst, never crosses 4 KB). INCR/FIXED only, so v1 passes as well.
+//---------------------------------------------------------------
+class axi4_stress_base_seq extends axi4_base_seq;
+    `uvm_object_utils(axi4_stress_base_seq)
+    function new(string name = "axi4_stress_base_seq"); super.new(name); endfunction
+
+    localparam int STRESS_COUNT = 32;
+    function bit [AXI_ADDR_WIDTH-1:0] slot(int i);
+        return 16'h6000 + i * 16'h0040;
+    endfunction
+
+    task one_burst(axi_dir_e d, int i);
+        req = axi4_seq_item::type_id::create("req");
+        start_item(req);
+        if (!req.randomize() with { dir == d; addr == slot(i); len inside {[0:3]};
+                                    burst inside {AXI_INCR, AXI_FIXED}; })
+            `uvm_error("RAND", "stress item randomize() failed")
+        finish_item(req);
+    endtask
+endclass
+
+class axi4_stress_write_seq extends axi4_stress_base_seq;
+    `uvm_object_utils(axi4_stress_write_seq)
+    function new(string name = "axi4_stress_write_seq"); super.new(name); endfunction
+    task body();
+        for (int i = 0; i < STRESS_COUNT; i++) one_burst(AXI_WRITE, i);
+    endtask
+endclass
+
+class axi4_stress_read_seq extends axi4_stress_base_seq;
+    `uvm_object_utils(axi4_stress_read_seq)
+    function new(string name = "axi4_stress_read_seq"); super.new(name); endfunction
+    task body();
+        for (int i = 0; i < STRESS_COUNT; i++) one_burst(AXI_READ, i);
+    endtask
+endclass
+
+//---------------------------------------------------------------
 // Coverage-closure stimulus
 //---------------------------------------------------------------
 class axi4_cov_seq extends axi4_base_seq;
@@ -252,9 +292,10 @@ class axi4_cov_seq extends axi4_base_seq;
         finish_item(rd);
     endtask
 
-    // Starts mid-window, so the wrap point is crossed. This is coverage only:
-    // the read-back is WRAP as well, which cannot expose a wrong wrap address.
-    // axi4_wrap_test checks that, with an INCR read-back of the window.
+    // Starts mid-window, so the wrap point is crossed. The read-back is WRAP
+    // too, so a wrap bug shared by the write and read paths cannot show here
+    // (axi4_wrap_test checks that, with an INCR read-back of the window), but
+    // a read-path-only one does (mutation campaign, mutant A06).
     task wrap_mid_window();
         wr_then_rd(16'h3C08, 8'd3, 3'd2, AXI_WRAP);   // window 0x3C00..0x3C0F
     endtask

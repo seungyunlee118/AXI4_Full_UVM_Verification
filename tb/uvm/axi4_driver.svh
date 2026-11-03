@@ -148,17 +148,26 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
         end
     endtask
 
+    // Next BREADY / RREADY value. At 100% no random number is drawn, so the
+    // always-ready tests keep exactly their old stimulus.
+    function bit next_ready();
+        return (cfg.ready_pct >= 100) || ($urandom_range(99) < cfg.ready_pct);
+    endfunction
+
     //---------------------------------------------------------
-    // Write response channel — always ready, count completions
+    // Write response channel — count completions on BVALID && BREADY
     //---------------------------------------------------------
     task b_thread();
-        vif.master_cb.bready <= 1'b1;
+        bit rdy = 1'b1;
+        vif.master_cb.bready <= rdy;
         forever begin
             @(vif.master_cb);
-            if (vif.master_cb.bvalid) begin
+            if (vif.master_cb.bvalid && rdy) begin   // rdy = what the bus saw this edge
                 if (n_inflight > 0)     n_inflight--;
                 if (wr_outstanding > 0) wr_outstanding--;
             end
+            rdy = next_ready();
+            vif.master_cb.bready <= rdy;
         end
     endtask
 
@@ -186,16 +195,19 @@ class axi4_driver extends uvm_driver #(axi4_seq_item);
     endtask
 
     //---------------------------------------------------------
-    // Read data channel — always ready, a burst ends on RLAST
+    // Read data channel — a burst ends on RVALID && RREADY && RLAST
     //---------------------------------------------------------
     task r_thread();
-        vif.master_cb.rready <= 1'b1;
+        bit rdy = 1'b1;
+        vif.master_cb.rready <= rdy;
         forever begin
             @(vif.master_cb);
-            if (vif.master_cb.rvalid && vif.master_cb.rlast) begin
+            if (vif.master_cb.rvalid && rdy && vif.master_cb.rlast) begin
                 if (n_inflight > 0)     n_inflight--;
                 if (rd_outstanding > 0) rd_outstanding--;
             end
+            rdy = next_ready();
+            vif.master_cb.rready <= rdy;
         end
     endtask
 
